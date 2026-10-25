@@ -1,13 +1,12 @@
-# Built binaries (zsh nnote/build.sh; clang for the spike tools)
-/nnote/nnote
-/spike/dump
-/spike/emphasis
-/spike/probe
-/spike/survey
-/spike/toggle
+# Build output (zsh build.sh)
+/build/
 
-# Test output: database snapshots and read dumps contain note titles
+# Python test tooling (uv run pytest)
+/.venv/
+/.pytest_cache/
+__pycache__/
+
+# Database snapshots or dumps from manual checks contain note titles
 *.txt
-/nnote/test/*.json
 
 .DS_Store

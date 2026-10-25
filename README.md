@@ -10,7 +10,8 @@ A command-line tool for agents to read and edit Apple Notes **natively**. It wor
 
 - macOS 27.2. The private methods were found on build 26B5112a. Each call checks the method exists and fails with `unsupported_macos` if it doesn't.
 - **Full Disk Access** for the process that runs `nnote`; without it you get `no_access`. In Claude's desktop app, only its Terminal panel inherits the grant given to Claude.app.
-- Build: `zsh build.sh`, which uses `clang` from the Command Line Tools and links Foundation, CoreData, AppKit and PencilKit.
+- Build: `zsh build.sh` builds `build/nnote` with `clang` from the Command Line Tools; `zsh build.sh install` also copies it to `~/.local/bin`.
+- `NNOTE_CONTAINER=<name>` makes `nnote` use a separate store at `~/Library/Group Containers/group.com.apple.notes/Containers/<name>/` instead of your notes. The tests use this; see [Development](#development).
 
 ## References
 
@@ -135,7 +136,7 @@ Character formatting is stored as text attributes: `TTHints` (bit 1 bold, bit 2 
 | Checklists: add, check, uncheck | Notes.app shows them; to-dos keep their UUID |
 | Tags, note links, tables | Native objects; the links open their notes |
 | Folders | Created "nnote Tests" and the subfolder "nnote Tests/Reports" |
-| Report from Markdown (`test/report.md`) | One note with headings, inline formatting, nested lists, quote, to-dos, code block, table, divider, note link, paragraph link, tag, link card, image and drawing, all created in one save and rendered correctly |
+| Report from Markdown (`tests/fixtures/report.md`) | One note with headings, inline formatting, nested lists, quote, to-dos, code block, table, divider, note link, paragraph link, tag, link card, image and drawing, all created in one save and rendered correctly |
 | Pin, set-style, bold/italic/underline on parts of a line | Rendered correctly |
 | Highlights 1–5 | Rendered as purple, pink, orange, mint and blue; color names work in `format` and in Markdown, and `read` reports them |
 | Paragraph link (`link --paragraph alpha`) | Points at alpha's `paragraph_id`, and `backlinks` reports it |
@@ -143,12 +144,41 @@ Character formatting is stored as text attributes: `TTHints` (bit 1 bold, bit 2 
 
 After each write, a row-by-row diff of the database showed changes only to On My Mac objects: the edited notes, their new tag, link and attachment objects, folders, and the account's change counter. Across the whole run, one iCloud note's change counter moved with no change to its content or date, which matches Notes.app's own bookkeeping.
 
-Test scripts: `test/test-writes.sh`, `test-guards.sh`, `step.sh` (one write plus a row diff), `rows.sh` (row snapshots), `test/icloud-diff.sh`.
+These rendering checks were done by hand in Notes.app. Regressions in what `nnote` writes and reads are caught by the e2e tests below.
+
+## Development
+
+### Layout
+
+| Path | Module | Interface |
+|---|---|---|
+| `src/main.m` | CLI | Commands, arguments, help |
+| `src/NNStore.{h,m}` | The Notes store | Open (read-only or writable), look up notes, folders and accounts, write guards, `commit` (one edit, saved the way Notes saves it). The seam to Notes: your store, or a test container |
+| `src/NNDocument.{h,m}` | A note's text | Paragraph JSON, finding a paragraph, inserting paragraphs, paragraph styles |
+| `src/NNObjects.{h,m}` | Native objects | Make a tag, note or paragraph link, table, file, link card, drawing or divider in a note |
+| `src/NNMarkdown.{h,m}` | Markdown | Parse, plan (dry run), render into a note, export |
+| `src/NNSVG.{h,m}` | SVG | SVG file → PencilKit drawing |
+| `src/NNCore.{h,m}` | Shared | Attribute keys, style and highlight names, JSON output and errors |
+| `tests/` | e2e tests | Every command through the CLI |
+| `scripts/backup-notestore.sh` | | Backs up the real store before any manual test against it |
+| `docs/findings.md` | | How the private API was found, and the first spike |
+
+### Tests
+
+```bash
+uv run pytest
+```
+
+- The suite builds `build/nnote` and runs every command through its JSON interface: all writes, their dry runs, and their error codes. Set `NNOTE_BIN` to test another binary.
+- It runs against a fresh store in the test container `nnote-e2e`, which it deletes before and after the run (`NNOTE_E2E_KEEP=1` keeps it).
+- It refuses to start if that store isn't empty. At the end, it checks that your real store has the same objects and note bodies as before.
+- It needs Full Disk Access (Claude's Terminal panel has it); without it, it stops with a message.
+- Every change should keep `uv run pytest` green. A new command or option needs a test in `tests/e2e_test.py`.
 
 ## Not supported or untested
 
 - **iCloud:** untested. It's blocked by default; add it to `NNOTE_WRITABLE_ACCOUNTS` only after testing sync.
 - Not supported: deleting or moving notes, paragraphs or attachments; editing table cells; text color; locked notes.
 - **SVG:** strokes only, so fills become outlines; text, gradients, `<use>` and CSS classes are ignored.
-- **Link cards:** whether the preview image is fetched while Notes.app is closed hasn't been checked.
+- **Link cards:** the URL is stored. Cards made before version 0.2.2 have no URL and show up empty. Whether Notes.app fetches the preview for a card added while it was closed hasn't been checked.
 - Links between accounts (On My Mac → iCloud) haven't been tried.

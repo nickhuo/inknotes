@@ -1,0 +1,15 @@
+[project]
+name = "nnote-tests"
+version = "0.0.0"
+description = "End-to-end tests for the nnote CLI"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["*_test.py"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
