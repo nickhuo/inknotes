@@ -1,5 +1,7 @@
-# Build output (zsh build.sh)
+# Build output (zsh build.sh / swift build)
 /build/
+/.build/
+/.swiftpm/
 
 # Python test tooling (uv run pytest)
 /.venv/

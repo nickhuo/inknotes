@@ -10,7 +10,7 @@ A command-line tool for agents to read and edit Apple Notes **natively**. It wor
 
 - macOS 27.2. The private methods were found on build 26B5112a. Each call checks the method exists and fails with `unsupported_macos` if it doesn't.
 - **Full Disk Access** for the process that runs `nnote`; without it you get `no_access`. In Claude's desktop app, only its Terminal panel inherits the grant given to Claude.app.
-- Build: `zsh build.sh` builds `build/nnote` with `clang` from the Command Line Tools; `zsh build.sh install` also copies it to `~/.local/bin`.
+- Build: `zsh build.sh` builds `build/nnote`, a Swift package built with `swift build` (Swift 6 from the Command Line Tools). `zsh build.sh install` also copies it to `~/.local/bin`.
 - `NNOTE_CONTAINER=<name>` makes `nnote` use a separate store at `~/Library/Group Containers/group.com.apple.notes/Containers/<name>/` instead of your notes. The tests use this; see [Development](#development).
 
 ## References
@@ -152,13 +152,14 @@ These rendering checks were done by hand in Notes.app. Regressions in what `nnot
 
 | Path | Module | Interface |
 |---|---|---|
-| `src/main.m` | CLI | Commands, arguments, help |
-| `src/NNStore.{h,m}` | The Notes store | Open (read-only or writable), look up notes, folders and accounts, write guards, `commit` (one edit, saved the way Notes saves it). The seam to Notes: your store, or a test container |
-| `src/NNDocument.{h,m}` | A note's text | Paragraph JSON, finding a paragraph, inserting paragraphs, paragraph styles |
-| `src/NNObjects.{h,m}` | Native objects | Make a tag, note or paragraph link, table, file, link card, drawing or divider in a note |
-| `src/NNMarkdown.{h,m}` | Markdown | Parse, plan (dry run), render into a note, export |
-| `src/NNSVG.{h,m}` | SVG | SVG file → PencilKit drawing |
-| `src/NNCore.{h,m}` | Shared | Attribute keys, style and highlight names, JSON output and errors |
+| `Sources/nnote/main.swift` | CLI | Commands, arguments, help |
+| `Sources/nnote/NotesShared.swift` | The private API | Every NotesShared method nnote calls, declared as an `@objc protocol` with its exact selector. Objects are viewed through these protocols, so each message send is type-checked |
+| `Sources/nnote/Store.swift` | The Notes store | Open (read-only or writable), look up notes, folders and accounts, write guards, `commit` (one edit, saved the way Notes saves it). The seam to Notes: your store, or a test container |
+| `Sources/nnote/Document.swift` | A note's text | Paragraph JSON, finding a paragraph, inserting paragraphs, paragraph styles |
+| `Sources/nnote/Objects.swift` | Native objects | Make a tag, note or paragraph link, table, file, link card, drawing or divider in a note |
+| `Sources/nnote/Markdown.swift` | Markdown | Parse, plan (dry run), render into a note, export |
+| `Sources/nnote/SVG.swift` | SVG | SVG file → PencilKit drawing |
+| `Sources/nnote/Core.swift` | Shared | Attribute keys, style and highlight names, JSON output and errors |
 | `tests/` | e2e tests | Every command through the CLI |
 | `scripts/backup-notestore.sh` | | Backs up the real store before any manual test against it |
 | `docs/findings.md` | | How the private API was found, and the first spike |
@@ -174,6 +175,11 @@ uv run pytest
 - It refuses to start if that store isn't empty. At the end, it checks that your real store has the same objects and note bodies as before.
 - It needs Full Disk Access (Claude's Terminal panel has it); without it, it stops with a message.
 - Every change should keep `uv run pytest` green. A new command or option needs a test in `tests/e2e_test.py`.
+- The tests only talk to the CLI, so they don't depend on the implementation language. Version 0.3.0 rewrote nnote from Objective-C into Swift; the same 23 tests passed unchanged before and after.
+
+### Calling a private method
+
+Declare it in `NotesShared.swift`, with the selector written out, on the protocol for that class (class methods go on the `…Class` protocol). Then call it through `view(object, as: Protocol.self)` or `NotesShared.classObject(name, as:)`. If the method might be missing on some macOS versions, check `responds(object, "selector:")` first and fail with `unsupported_macos`. Avoid `init…` methods, whose memory ownership a protocol can't express; `-init` plus a copy method (such as `todoWithDone:`) usually does the job.
 
 ## Not supported or untested
 
