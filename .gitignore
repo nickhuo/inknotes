@@ -1,0 +1,13 @@
+# Built binaries (zsh nnote/build.sh; clang for the spike tools)
+/nnote/nnote
+/spike/dump
+/spike/emphasis
+/spike/probe
+/spike/survey
+/spike/toggle
+
+# Test output: database snapshots and read dumps contain note titles
+*.txt
+/nnote/test/*.json
+
+.DS_Store
