@@ -144,6 +144,8 @@ Character formatting is stored as text attributes: `TTHints` (bit 1 bold, bit 2 
 
 After each write, a row-by-row diff of the database showed changes only to On My Mac objects: the edited notes, their new tag, link and attachment objects, folders, and the account's change counter. Across the whole run, one iCloud note's change counter moved with no change to its content or date, which matches Notes.app's own bookkeeping.
 
+After the Swift rewrite (0.3.0), the installed binary created the report fixture and its link target in On My Mac. Notes.app rendered all of it correctly: headings, formatting, highlights, lists, quote, to-dos, code, table, divider, both links, tag, link card, image and drawing.
+
 These rendering checks were done by hand in Notes.app. Regressions in what `nnote` writes and reads are caught by the e2e tests below.
 
 ## Development
