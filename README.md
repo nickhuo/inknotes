@@ -49,7 +49,7 @@ A command-line tool for agents to read and edit Apple Notes **natively**. It wor
 | `add-table <note> --tsv FILE\|-` | Native table; rows are lines, cells are tab-separated |
 | `add-url <note> <url>` | Link card |
 | `attach <note> <file>` | Image, PDF or any file |
-| `draw <note> --svg FILE [--width PT] [--ink pen\|pencil\|marker] [--color #rrggbb]` | Native drawing that can be edited with the drawing tools (default 400 pt wide, pen, the SVG's own colors) |
+| `draw <note> --svg FILE [--width PT] [--ink pen\|pencil\|marker] [--color #rrggbb]` | Native drawing that can be edited with the drawing tools (default 400 pt wide, pen, the SVG's own colors). The dry run reports how faithful it is: `max_deviation`, the farthest the drawn line strays from the SVG outline (in points), and `width_ratio`, the narrowest and widest strokes as drawn width ÷ SVG stroke width |
 
 ## Markdown
 
@@ -187,6 +187,8 @@ Declare it in `NotesShared.swift`, with the selector written out, on the protoco
 
 - **iCloud:** untested. It's blocked by default; add it to `NNOTE_WRITABLE_ACCOUNTS` only after testing sync.
 - Not supported: deleting or moving notes, paragraphs or attachments; editing table cells; text color; locked notes.
-- **SVG:** strokes only, so fills become outlines; text, gradients, `<use>` and CSS classes are ignored.
+- **SVG:** strokes only, so fills become outlines; gradients, `<use>` and CSS classes are ignored. Rounded rectangles (`rx`, `ry`) are supported. `<text>` and `<tspan>` are drawn as hollow glyph outlines in their fill color (CoreText, so Chinese falls back to PingFang), with `font-size`, `font-family`, bold, `text-anchor` and `dominant-baseline="middle"`. The dry run reports `text` (elements) and `glyphs` (characters drawn).
+- **Bundle identifier:** PencilKit stores per-app state under the bundle identifier and crashes in a process without one, so the binary embeds `Sources/nnote/Info.plist` (`dev.nnote.cli`).
+- **Drawing fidelity:** PencilKit treats stroke points as spline control points and its point size is not the drawn width, so nnote samples every edge densely and converts each SVG stroke width into the size that ink draws at. Measured on the test fixtures: the pen stays within 0.7 pt of the outline at 0.98–1.04× the SVG width; pencil is 0.7–1.2× (textured edge); marker is 0.6–1.4× (a chisel nib, thinner across horizontal lines). The e2e tests check these bounds.
 - **Link cards:** the URL is stored. Cards made before version 0.2.2 have no URL and show up empty. Whether Notes.app fetches the preview for a card added while it was closed hasn't been checked.
 - Links between accounts (On My Mac → iCloud) haven't been tried.

@@ -3,7 +3,7 @@
 
 import Foundation
 
-let version = "0.3.0"
+let version = "0.3.1"
 
 // MARK: - Arguments
 

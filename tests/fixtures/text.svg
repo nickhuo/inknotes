@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 220">
+  <!-- Text: alignment, vertical centering, mixed Latin and Chinese, bold, rotation, tspan. -->
+  <line x1="160" y1="0" x2="160" y2="220" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="10" y="30" font-size="20" fill="#0f172a">Hello nnote</text>
+  <text x="160" y="70" font-size="20" text-anchor="middle" dominant-baseline="middle" fill="#1f6feb">居中 middle</text>
+  <text x="310" y="110" font-size="18" text-anchor="end" fill="#dc2626">End 右对齐</text>
+  <text x="10" y="150" font-size="18" font-weight="bold" fill="#16a34a">Bold 粗体</text>
+  <g transform="rotate(-10 230 170)"><text x="180" y="180" font-size="16" fill="#9333ea">Rotated 旋转</text></g>
+  <text x="10" y="205" font-size="16" fill="#0f172a">Part <tspan fill="#f59e0b">two</tspan></text>
+</svg>

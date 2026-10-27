@@ -313,6 +313,40 @@ def test_draw_svg(nnote, tmp_path):
     errors(nnote, "bad_svg", "draw", note["id"], "--svg", str(tmp_path / "empty.svg"))
 
 
+@pytest.mark.parametrize("svg, strokes", [("house.svg", 7), ("shapes.svg", 15), ("pipeline.svg", 103), ("widths.svg", 10), ("text.svg", 130)])
+@pytest.mark.parametrize("width", ["400", "160"])
+def test_drawing_follows_the_svg(nnote, svg, strokes, width):
+    """The drawn line must stay on the SVG's outline (PencilKit smooths points into a spline)
+    and be as wide as the SVG says (PencilKit's point size is not the drawn width)."""
+    note = nnote.create("# Fidelity\nbody")
+    drawing = nnote("draw", note["id"], "--svg", str(FIXTURES / svg), "--width", width)["plan"]["drawing"]
+    assert drawing["strokes"] == strokes
+    assert drawing["max_deviation"] < 1.5, f"{svg} at width {width}: strayed {drawing['max_deviation']} pt from the outline"
+    low, high = drawing["width_ratio"]
+    assert 0.8 <= low and high <= 1.25, f"{svg} at width {width}: drawn width is {low}–{high}× the SVG's stroke width"
+
+
+@pytest.mark.parametrize("svg, texts, glyphs", [("text.svg", 6, 46), ("pipeline.svg", 9, 36)])
+def test_drawing_text_becomes_glyph_outlines(nnote, svg, texts, glyphs):
+    """Every visible character, Latin or Chinese, becomes outline strokes (spaces have none)."""
+    note = nnote.create("# Text drawing\nbody")
+    drawing = nnote("draw", note["id"], "--svg", str(FIXTURES / svg))["plan"]["drawing"]
+    assert (drawing["text"], drawing["glyphs"]) == (texts, glyphs)
+    result = nnote("draw", note["id"], "--svg", str(FIXTURES / svg), "--apply")["note"]
+    assert attachments(result, "drawing")[0]["uti"] == "com.apple.paper"
+
+
+@pytest.mark.parametrize("ink, low_bound, high_bound", [("pencil", 0.6, 1.4), ("marker", 0.5, 1.5)])
+@pytest.mark.parametrize("svg", ["shapes.svg", "widths.svg"])
+def test_other_inks_draw_close_to_the_svg_width(nnote, svg, ink, low_bound, high_bound):
+    """Pencil has a textured edge and marker a chisel nib that is thinner across horizontal
+    lines, so their widths vary more than the pen's; none may vanish or balloon."""
+    note = nnote.create("# Inks\nbody")
+    drawing = nnote("draw", note["id"], "--svg", str(FIXTURES / svg), "--ink", ink)["plan"]["drawing"]
+    low, high = drawing["width_ratio"]
+    assert low_bound <= low and high <= high_bound, f"{svg} with {ink}: drawn width is {low}–{high}× the SVG's stroke width"
+
+
 def test_append_markdown(nnote):
     note = nnote.create("# Append\nfirst\nlast")
     result = nnote("append", note["id"], "--markdown", "-", "--after", "first", "--apply",

@@ -7,6 +7,7 @@
 // stroke width. The drawing is scaled to `width` points wide.
 
 import AppKit
+import CoreText
 import Foundation
 import PencilKit
 
@@ -34,20 +35,128 @@ func drawingFromSVG(path: String, width: Double, color colorOverride: String?, i
     let override = (colorOverride ?? "").isEmpty ? nil : parseColor(colorOverride!)
     var strokes: [PKStroke] = []
     var pointCount = 0
+    var maxDeviation = 0.0
+    var widthRatios: [Double] = []
     for shape in reader.shapes {
-        let w = shape.width * scale
-        let controlPoints = shape.points.enumerated().map { i, p in
-            PKStrokePoint(location: CGPoint(x: (p.x - bounds.minX) * scale, y: (p.y - bounds.minY) * scale),
-                          timeOffset: Double(i) * 0.01, size: CGSize(width: w, height: w),
+        // Glyph outlines get at least 0.8 pt so small labels stay legible.
+        let w = shape.isText ? max(shape.width * scale, 0.8) : shape.width * scale
+        let size = pointSize(forWidth: w, ink: inkType)
+        let polyline = shape.points.map { CGPoint(x: ($0.x - bounds.minX) * scale, y: ($0.y - bounds.minY) * scale) }
+        // PencilKit smooths control points into a spline; dense points keep it on straight edges and corners.
+        let controlPoints = densified(polyline, step: 2).enumerated().map { i, p in
+            PKStrokePoint(location: p, timeOffset: Double(i) * 0.01, size: CGSize(width: size, height: size),
                           opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2)
         }
         pointCount += controlPoints.count
         let strokePath = PKStrokePath(controlPoints: controlPoints, creationDate: Date())
-        strokes.append(PKStroke(ink: PKInk(inkType, color: override ?? shape.color), path: strokePath))
+        maxDeviation = max(maxDeviation, deviation(of: strokePath, from: polyline))
+        let stroke = PKStroke(ink: PKInk(inkType, color: override ?? shape.color), path: strokePath)
+        // Glyph contours sit too close together (a letter's inside and outside) to measure one alone.
+        if !shape.isText, let drawn = drawnWidth(of: stroke, expected: w) { widthRatios.append(drawn / w) }
+        strokes.append(stroke)
     }
+    func decimal(_ v: Double) -> NSDecimalNumber { NSDecimalNumber(string: String(format: "%.2f", v)) }
     let stats: [String: Any] = ["strokes": strokes.count, "points": pointCount,
-                                "size": [(bounds.width * scale).rounded(), (bounds.height * scale).rounded()]]
+                                "size": [(bounds.width * scale).rounded(), (bounds.height * scale).rounded()],
+                                "max_deviation": decimal(maxDeviation),
+                                "text": reader.textCount, "glyphs": reader.glyphCount,
+                                "width_ratio": [decimal(widthRatios.min() ?? 0), decimal(widthRatios.max() ?? 0)]]
     return .success((PKDrawing(strokes: strokes), stats))
+}
+
+/// The PKStrokePoint size that makes `ink` draw a line `width` points wide. A point's size is not
+/// the drawn width. Measured by rendering lines on macOS 27.2:
+/// - pen (and monoline): drawn width = 2 × (size − 2), the same in every direction
+/// - pencil: textured and not linear for thin lines; interpolated from the table below
+/// - marker: a chisel nib, about half as wide across horizontal lines as across vertical ones;
+///   the table is the average of the two
+private func pointSize(forWidth width: Double, ink: PKInk.InkType) -> Double {
+    let sizes: [Double] = [1, 2, 2.5, 3, 4, 5, 6, 8, 10, 15, 20, 30, 40]
+    let drawn: [Double]
+    switch ink {
+    case .pencil: drawn = [0.79, 3.33, 3.65, 4.52, 6.29, 8.13, 9.5, 12.36, 18.36, 27.15, 36.27, 46.84, 65.61]
+    case .marker: drawn = [0.68, 1.34, 1.68, 2.0, 2.68, 3.36, 4.06, 5.53, 7.07, 11.15, 15.71, 26.34, 35.1]
+    default: return width / 2 + 2
+    }
+    if width <= drawn[0] { return max(sizes[0] * width / drawn[0], 0.5) }
+    for i in 1..<drawn.count where width <= drawn[i] {
+        let t = (width - drawn[i - 1]) / (drawn[i] - drawn[i - 1])
+        return sizes[i - 1] + t * (sizes[i] - sizes[i - 1])
+    }
+    let n = drawn.count - 1
+    return sizes[n] + (width - drawn[n]) * (sizes[n] - sizes[n - 1]) / (drawn[n] - drawn[n - 1])
+}
+
+/// The width, in points, PencilKit actually renders `stroke` at. The stroke is rendered on its
+/// own at 8x; at five places along its path the ink coverage is summed across it, within
+/// reach of where the line should be (so other parts of the same shape don't count), and the
+/// median is returned. Nil for strokes too short to measure.
+private func drawnWidth(of stroke: PKStroke, expected: Double) -> Double? {
+    let path = stroke.path.interpolatedPoints(by: .distance(1)).map(\.location)
+    guard path.count > 12 else { return nil }
+    let pixelsPerPoint = 8.0
+    let reach = expected + 2
+    var widths: [Double] = []
+    for fraction in [0.2, 0.35, 0.5, 0.65, 0.8] {
+        let i = Int(Double(path.count - 1) * fraction)
+        let a = path[max(i - 3, 0)], b = path[min(i + 3, path.count - 1)], center = path[i]
+        let length = hypot(b.x - a.x, b.y - a.y)
+        guard length > 0 else { continue }
+        let normal = CGPoint(x: -(b.y - a.y) / length, y: (b.x - a.x) / length)
+        let area = CGRect(x: center.x - reach, y: center.y - reach, width: 2 * reach, height: 2 * reach)
+        let image = PKDrawing(strokes: [stroke]).image(from: area, scale: pixelsPerPoint)
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { continue }
+        let bitmap = NSBitmapImageRep(cgImage: cg)
+        var coverage = 0.0
+        for step in stride(from: -reach, through: reach, by: 1 / pixelsPerPoint) {
+            let x = Int(((center.x + normal.x * step) - area.minX) * pixelsPerPoint)
+            let y = Int(((center.y + normal.y * step) - area.minY) * pixelsPerPoint)
+            guard x >= 0, y >= 0, x < bitmap.pixelsWide, y < bitmap.pixelsHigh else { continue }
+            coverage += Double(bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0)
+        }
+        widths.append(coverage / pixelsPerPoint)
+    }
+    guard !widths.isEmpty else { return nil }
+    return widths.sorted()[widths.count / 2]
+}
+
+/// The polyline with extra points so no two consecutive points are more than `step` apart;
+/// repeated points are dropped.
+private func densified(_ points: [CGPoint], step: Double) -> [CGPoint] {
+    guard var last = points.first else { return [] }
+    var out = [last]
+    for p in points.dropFirst() {
+        let d = hypot(p.x - last.x, p.y - last.y)
+        if d == 0 { continue }
+        let n = Int((d / step).rounded(.up))
+        for k in stride(from: 1, to: n, by: 1) {
+            let t = Double(k) / Double(n)
+            out.append(CGPoint(x: last.x + (p.x - last.x) * t, y: last.y + (p.y - last.y) * t))
+        }
+        out.append(p)
+        last = p
+    }
+    return out
+}
+
+/// How far, in points, the line PencilKit actually draws strays from the polyline it was
+/// given, measured both ways (drawn → intended and intended → drawn), so cut corners count.
+/// PencilKit treats stroke points as spline control points, not as a polyline to follow.
+private func deviation(of path: PKStrokePath, from polyline: [CGPoint]) -> Double {
+    let drawn = path.interpolatedPoints(by: .distance(0.5)).map(\.location)
+    func distance(_ p: CGPoint, to line: [CGPoint]) -> Double {
+        guard line.count > 1 else { return line.first.map { hypot(p.x - $0.x, p.y - $0.y) } ?? 0 }
+        var best = Double.infinity
+        for (a, b) in zip(line, line.dropFirst()) {
+            let dx = b.x - a.x, dy = b.y - a.y
+            let t = dx == 0 && dy == 0 ? 0 : max(0, min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)))
+            best = min(best, hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)))
+        }
+        return best
+    }
+    let away = drawn.map { distance($0, to: polyline) }.max() ?? 0
+    let missed = polyline.map { distance($0, to: drawn) }.max() ?? 0
+    return max(away, missed)
 }
 
 // MARK: - Geometry
@@ -239,18 +348,26 @@ private struct Shape {
     let points: [CGPoint]
     let color: NSColor
     let width: Double
+    /// An outline of a text glyph.
+    var isText = false
 }
+
+private let textProperties = ["font-size", "font-family", "font-weight", "text-anchor", "dominant-baseline"]
 
 private final class SVGReader: NSObject, XMLParserDelegate {
     var shapes: [Shape] = []
     var viewBox: CGRect?
+    private(set) var textCount = 0
+    private(set) var glyphCount = 0
 
-    /// Inherited state: transform, stroke, fill, stroke width.
-    private struct Context { var matrix: Matrix; var stroke: String; var fill: String; var width: Double }
+    /// Inherited state: transform, stroke, fill, stroke width, text properties.
+    private struct Context { var matrix: Matrix; var stroke: String; var fill: String; var width: Double; var text: [String: String] = [:] }
     private var stack = [Context(matrix: Matrix(), stroke: "none", fill: "black", width: 1)]
+    /// The <text> being read: its attributes, context and characters (from it and its <tspan>s).
+    private var pendingText: (attributes: [String: String], context: Context, content: String)?
 
     private func styleAttributes(_ attrs: [String: String]) -> [String: String] {
-        var s = attrs.filter { ["stroke", "fill", "stroke-width"].contains($0.key) }
+        var s = attrs.filter { (["stroke", "fill", "stroke-width"] + textProperties).contains($0.key) }
         for declaration in (attrs["style"] ?? "").split(separator: ";") {
             let kv = declaration.split(separator: ":", omittingEmptySubsequences: false)
             if kv.count == 2 { s[kv[0].trimmingCharacters(in: .whitespaces)] = kv[1].trimmingCharacters(in: .whitespaces) }
@@ -261,10 +378,14 @@ private final class SVGReader: NSObject, XMLParserDelegate {
     func parser(_ parser: XMLParser, didStartElement name: String, namespaceURI: String?, qualifiedName: String?, attributes a: [String: String]) {
         let parent = stack.last!
         let st = styleAttributes(a)
-        let ctx = Context(matrix: parent.matrix.then(parseTransform(a["transform"])), stroke: st["stroke"] ?? parent.stroke,
-                          fill: st["fill"] ?? parent.fill, width: st["stroke-width"].map { ($0 as NSString).doubleValue } ?? parent.width)
+        var ctx = Context(matrix: parent.matrix.then(parseTransform(a["transform"])), stroke: st["stroke"] ?? parent.stroke,
+                          fill: st["fill"] ?? parent.fill, width: st["stroke-width"].map { ($0 as NSString).doubleValue } ?? parent.width,
+                          text: parent.text)
+        for key in textProperties { if let v = st[key] { ctx.text[key] = v } }
         stack.append(ctx)
 
+        if name == "text" { pendingText = (a, ctx, ""); return }
+        if name == "tspan" { return }  // its characters belong to the enclosing <text>
         if name == "svg" {
             let vb = numbers(a["viewBox"])
             if vb.count == 4 { viewBox = CGRect(x: vb[0], y: vb[1], width: vb[2], height: vb[3]) }
@@ -288,8 +409,20 @@ private final class SVGReader: NSObject, XMLParserDelegate {
             if name == "polygon" { b.close() }
         case "rect":
             let x = num("x"), y = num("y"), w = num("width"), h = num("height")
-            b.move(to: CGPoint(x: x, y: y)); b.line(to: CGPoint(x: x + w, y: y)); b.line(to: CGPoint(x: x + w, y: y + h))
-            b.line(to: CGPoint(x: x, y: y + h)); b.close()
+            // Rounded corners: rx and ry default to each other, and are capped at half the side.
+            var rx = a["rx"] != nil ? num("rx") : num("ry"), ry = a["ry"] != nil ? num("ry") : rx
+            rx = min(max(rx, 0), w / 2); ry = min(max(ry, 0), h / 2)
+            if rx > 0 && ry > 0 {
+                func corner(_ to: CGPoint) { b.arc(rx: rx, ry: ry, rotation: 0, large: false, sweep: true, to: to) }
+                b.move(to: CGPoint(x: x + rx, y: y))
+                b.line(to: CGPoint(x: x + w - rx, y: y)); corner(CGPoint(x: x + w, y: y + ry))
+                b.line(to: CGPoint(x: x + w, y: y + h - ry)); corner(CGPoint(x: x + w - rx, y: y + h))
+                b.line(to: CGPoint(x: x + rx, y: y + h)); corner(CGPoint(x: x, y: y + h - ry))
+                b.line(to: CGPoint(x: x, y: y + ry)); corner(CGPoint(x: x + rx, y: y))
+            } else {
+                b.move(to: CGPoint(x: x, y: y)); b.line(to: CGPoint(x: x + w, y: y)); b.line(to: CGPoint(x: x + w, y: y + h))
+                b.line(to: CGPoint(x: x, y: y + h)); b.close()
+            }
         case "circle", "ellipse":
             let cx = num("cx"), cy = num("cy")
             let rx = name == "circle" ? num("r") : num("rx"), ry = name == "circle" ? num("r") : num("ry")
@@ -307,7 +440,83 @@ private final class SVGReader: NSObject, XMLParserDelegate {
         }
     }
 
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        pendingText?.content += string
+    }
+
     func parser(_ parser: XMLParser, didEndElement name: String, namespaceURI: String?, qualifiedName: String?) {
+        if name == "text", let text = pendingText {
+            addText(text.content, attributes: text.attributes, context: text.context)
+            pendingText = nil
+        }
         if stack.count > 1 { stack.removeLast() }
+    }
+
+    /// Text as glyph outlines: CoreText lays the line out (falling back to other fonts, such
+    /// as PingFang for Chinese, as needed), and each glyph's outline becomes strokes. PencilKit
+    /// cannot fill, so text is drawn hollow, in its fill color.
+    private func addText(_ raw: String, attributes a: [String: String], context ctx: Context) {
+        let content = raw.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard !content.isEmpty else { return }
+        let props = ctx.text
+        let size = props["font-size"].map { ($0 as NSString).doubleValue }.flatMap { $0 > 0 ? $0 : nil } ?? 16
+        let family = (props["font-family"] ?? "").split(separator: ",").first?
+            .trimmingCharacters(in: CharacterSet(charactersIn: " '\"")) ?? ""
+        let generic: Set<String> = ["", "sans-serif", "serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "monospace"]
+        var font: CTFont = generic.contains(family)
+            ? (family == "monospace" ? CTFontCreateWithName("Menlo" as CFString, size, nil)
+                                     : CTFontCreateUIFontForLanguage(.system, size, nil) ?? CTFontCreateWithName("Helvetica" as CFString, size, nil))
+            : CTFontCreateWithName(family as CFString, size, nil)
+        let weight = props["font-weight"] ?? ""
+        if weight == "bold" || (Int(weight) ?? 0) >= 600,
+           let bold = CTFontCreateCopyWithSymbolicTraits(font, size, nil, .traitBold, .traitBold) {
+            font = bold
+        }
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: content, attributes: [kCTFontAttributeName as NSAttributedString.Key: font]))
+        var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
+        let lineWidth = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+        var x = ((a["x"] ?? "") as NSString).doubleValue, y = ((a["y"] ?? "") as NSString).doubleValue
+        switch props["text-anchor"] {
+        case "middle": x -= lineWidth / 2
+        case "end": x -= lineWidth
+        default: break
+        }
+        switch props["dominant-baseline"] {
+        case "middle", "central": y += (ascent - descent) / 2
+        case "hanging", "text-before-edge": y += ascent
+        default: break
+        }
+        let b = PathBuilder()
+        for run in CTLineGetGlyphRuns(line) as! [CTRun] {
+            let runFont = (CTRunGetAttributes(run) as NSDictionary)[kCTFontAttributeName] as! CTFont
+            let count = CTRunGetGlyphCount(run)
+            var glyphs = [CGGlyph](repeating: 0, count: count)
+            var positions = [CGPoint](repeating: .zero, count: count)
+            CTRunGetGlyphs(run, CFRange(location: 0, length: 0), &glyphs)
+            CTRunGetPositions(run, CFRange(location: 0, length: 0), &positions)
+            for (glyph, position) in zip(glyphs, positions) {
+                guard let outline = CTFontCreatePathForGlyph(runFont, glyph, nil), !outline.isEmpty else { continue }  // spaces
+                glyphCount += 1
+                // Glyph space is y-up from the baseline; SVG is y-down.
+                func point(_ q: CGPoint) -> CGPoint { CGPoint(x: x + position.x + q.x, y: y - position.y - q.y) }
+                outline.applyWithBlock { element in
+                    let e = element.pointee
+                    switch e.type {
+                    case .moveToPoint: b.move(to: point(e.points[0]))
+                    case .addLineToPoint: b.line(to: point(e.points[0]))
+                    case .addQuadCurveToPoint: b.quad(point(e.points[0]), to: point(e.points[1]))
+                    case .addCurveToPoint: b.cubic(point(e.points[0]), point(e.points[1]), to: point(e.points[2]))
+                    case .closeSubpath: b.close()
+                    @unknown default: break
+                    }
+                }
+            }
+        }
+        textCount += 1
+        let color = parseColor(ctx.fill) ?? parseColor(ctx.stroke) ?? .black
+        let width = (parseColor(ctx.stroke) != nil ? ctx.width : size * 0.045) * ctx.matrix.scale
+        for sub in b.subpaths where sub.count >= 2 {
+            shapes.append(Shape(points: sub.map(ctx.matrix.apply), color: color, width: width, isText: true))
+        }
     }
 }

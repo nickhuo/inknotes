@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200">
+  <!-- Stroke widths from hairline to bold, horizontal, vertical, diagonal and curved. -->
+  <g stroke="#000" fill="none">
+    <line x1="10" y1="20" x2="140" y2="20" stroke-width="1"/>
+    <line x1="10" y1="50" x2="140" y2="50" stroke-width="2"/>
+    <line x1="10" y1="80" x2="140" y2="80" stroke-width="3"/>
+    <line x1="10" y1="120" x2="140" y2="120" stroke-width="6"/>
+    <line x1="10" y1="170" x2="140" y2="170" stroke-width="12"/>
+    <line x1="170" y1="10" x2="170" y2="190" stroke-width="1"/>
+    <line x1="200" y1="10" x2="200" y2="190" stroke-width="4"/>
+    <line x1="220" y1="20" x2="290" y2="90" stroke-width="2"/>
+    <path d="M220 190 Q 255 110 290 190" stroke-width="3"/>
+  </g>
+  <polygon points="230,100 260,100 245,130" fill="#db2777"/>
+</svg>
