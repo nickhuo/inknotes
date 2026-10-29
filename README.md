@@ -14,6 +14,85 @@ A command-line tool for agents to read and edit Apple Notes **natively**. It wor
 - Build: `zsh build.sh` builds `build/inknotes`, a Swift package built with `swift build` (Swift 6 from the Command Line Tools). `zsh build.sh install` also copies it to `~/.local/bin`.
 - `INKNOTES_CONTAINER=<name>` makes `inknotes` use a separate store at `~/Library/Group Containers/group.com.apple.notes/Containers/<name>/` instead of your notes. The tests use this; see [Development](#development).
 
+## Examples
+
+These run as written against `On My Mac`, the default writable account. To write to iCloud, prefix a write with `INKNOTES_WRITABLE_ACCOUNTS=iCloud` and pass `--account iCloud` to `create`, `create-folder`, `find`, `folders` and `tags`.
+
+**Find and read**
+
+```bash
+inknotes folders                                   # folder paths, ids, note counts
+inknotes tags                                      # tags and how many notes use each
+inknotes find "Weekly review"                      # titles containing the text, newest first
+inknotes find --tag weekly --limit 5
+inknotes find --folder Projects/Reports --pinned 1
+
+NOTE=$(inknotes find "Weekly review" | jq -r '.notes[0].id')
+inknotes read "$NOTE"                              # paragraphs, to-dos, formatting, links, tables as JSON
+inknotes read "$NOTE" --format markdown            # the same note as Markdown
+inknotes backlinks "$NOTE"                         # notes that link here
+```
+
+**Create a note from Markdown.** Without `--apply`, a write only prints its plan.
+
+```bash
+inknotes create-folder Projects --apply
+inknotes create-folder Reports --parent Projects --apply
+
+cat > review.md <<'EOF'
+# Weekly review
+
+## Done
+- [x] Ship inknotes 0.4.0
+- [ ] Publish the skill
+
+## Notes
+The release went **well**; see ==the changelog==. Next steps are in [[Roadmap#Q4 goals]].
+
+| Area | Status |
+|---|---|
+| CLI | done |
+| Skill | in progress |
+
+https://developer.apple.com/documentation/pencilkit
+
+#weekly
+EOF
+
+inknotes create --folder Projects/Reports --markdown review.md           # dry run: check the plan
+inknotes create --folder Projects/Reports --markdown review.md --apply   # write it
+printf '## Next week\n- [ ] Plan 0.5.0\n' | inknotes append "$NOTE" --markdown - --apply
+```
+
+`[[Roadmap#Q4 goals]]` needs a note titled `Roadmap` with a paragraph `Q4 goals`; the dry run fails with `note_not_found` or `paragraph_not_found` otherwise.
+
+**Edit to-dos, styles and formatting.** A paragraph is named by its text as `read` shows it, or by `--index N`.
+
+```bash
+inknotes check "$NOTE" "Publish the skill" --apply
+inknotes check "$NOTE" "Publish the skill" --undo --apply
+inknotes add-todo "$NOTE" "Write release notes" --after "Publish the skill" --apply
+inknotes set-style "$NOTE" "Notes" subheading --apply
+inknotes set-style "$NOTE" --index 1 --style subheading --apply   # "Done"; read lists each paragraph's index
+inknotes format "$NOTE" "Done" --highlight mint --apply
+inknotes format "$NOTE" "Write release notes" --text "release notes" --bold --link https://github.com/nickhuo/inknotes/releases --apply
+inknotes pin "$NOTE" --apply
+```
+
+**Links, tags and objects**
+
+```bash
+ROADMAP=$(inknotes find "Roadmap" | jq -r '.notes[0].id')
+inknotes link "$NOTE" "$ROADMAP" --apply                           # link to the note
+inknotes link "$NOTE" "$ROADMAP" --paragraph "Q4 goals" --apply    # link to one paragraph
+inknotes add-tag "$NOTE" release --apply
+
+printf 'Version\tDate\n0.4.0\t2026-10-28\n' | inknotes add-table "$NOTE" --tsv - --apply
+inknotes add-url "$NOTE" https://github.com/nickhuo/inknotes --apply
+inknotes attach "$NOTE" screenshot.png --apply
+inknotes draw "$NOTE" --svg architecture.svg --width 360 --ink marker --color '#1f6feb' --apply
+```
+
 ## References
 
 - `<note>`: a note's `id` (UUID, from `find`), its `uri` (`x-coredata://…/ICNote/pN`), or the number `N`.
