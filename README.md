@@ -106,6 +106,15 @@ Error codes: `usage`, `no_access`, `note_not_found`, `ambiguous_note`, `folder_n
 
 ## Agent workflows
 
+The agent skill [`use-apple-notes`](skills/use-apple-notes/SKILL.md) teaches these workflows. `skills add` installs only the skill; the binary comes from this repo's GitHub releases (Apple silicon, needs `gh` with access to the private repo):
+
+```bash
+npx skills add nickhuo/inknotes --skill use-apple-notes -g
+mkdir -p ~/.local/bin && gh release download --repo nickhuo/inknotes --pattern inknotes --output ~/.local/bin/inknotes --clobber && chmod +x ~/.local/bin/inknotes
+```
+
+To publish a release, run `zsh build.sh` and attach `build/inknotes` to a release tagged `v<version>` (the `version` in `Sources/inknotes/main.swift`).
+
 **Edit a note:** `find` → `read` → run the write without `--apply` → check the `plan` → run it again with `--apply` → check the returned `note`.
 
 **Write a research report:**
