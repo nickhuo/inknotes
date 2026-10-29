@@ -21,7 +21,7 @@ wheels = [
 ]
 
 [[package]]
-name = "nnote-tests"
+name = "inknotes-tests"
 version = "0.0.0"
 source = { virtual = "." }
 

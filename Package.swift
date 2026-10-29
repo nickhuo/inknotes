@@ -4,15 +4,15 @@ import PackageDescription
 
 // PencilKit keeps per-app state under the bundle identifier and crashes in a process
 // without one, so the command-line binary embeds an Info.plist (__TEXT,__info_plist).
-let infoPlist = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Sources/nnote/Info.plist").path
+let infoPlist = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Sources/inknotes/Info.plist").path
 
 let package = Package(
-    name: "nnote",
+    name: "inknotes",
     platforms: [.macOS(.v15)],
     targets: [
         .executableTarget(
-            name: "nnote",
-            path: "Sources/nnote",
+            name: "inknotes",
+            path: "Sources/inknotes",
             exclude: ["Info.plist"],
             linkerSettings: [
                 .linkedFramework("CoreData"), .linkedFramework("PencilKit"), .linkedFramework("AppKit"),

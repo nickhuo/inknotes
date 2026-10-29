@@ -1,7 +1,7 @@
 // The Notes store, reached through Notes' private NotesShared framework.
 //
 // This is the seam to Notes. It has two adapters, chosen by the environment:
-// the user's store, or (NNOTE_CONTAINER=<name>) a separate store at
+// the user's store, or (INKNOTES_CONTAINER=<name>) a separate store at
 // …/group.com.apple.notes/Containers/<name>/NoteStore.sqlite, which Notes'
 // own UI tests use and the e2e tests use. A fresh container gets an
 // On My Mac account when first opened for writing.
@@ -28,7 +28,7 @@ enum Store {
             fail("unsupported_macos", "ICNoteContext lacks \(sel)")
         }
         let contexts = view(contextClass, as: ICNoteContextClass.self)
-        let container = ProcessInfo.processInfo.environment["NNOTE_CONTAINER"] ?? ""
+        let container = ProcessInfo.processInfo.environment["INKNOTES_CONTAINER"] ?? ""
         if !container.isEmpty { contexts.useContainer(named: container) }
         contexts.startSharedContext(options: writable ? 0 : readOnlyOption)
         guard let shared = contexts.sharedContext(), let moc = view(shared, as: ICNoteContext.self).managedObjectContext() else {
@@ -117,13 +117,13 @@ enum Store {
 
     // MARK: Writes
 
-    /// The account must be in NNOTE_WRITABLE_ACCOUNTS (default "On My Mac").
+    /// The account must be in INKNOTES_WRITABLE_ACCOUNTS (default "On My Mac").
     static func guardAccount(_ account: AnyObject) {
-        let configured = ProcessInfo.processInfo.environment["NNOTE_WRITABLE_ACCOUNTS"]
+        let configured = ProcessInfo.processInfo.environment["INKNOTES_WRITABLE_ACCOUNTS"]
         let allowed = Set((configured ?? "On My Mac").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() })
         let name = kv(account, "name") as? String ?? ""
         if !allowed.contains(name.lowercased()) {
-            fail("account_not_writable", "Account \"\(name)\" is not writable. Writable accounts: \(configured ?? "On My Mac") (set NNOTE_WRITABLE_ACCOUNTS).")
+            fail("account_not_writable", "Account \"\(name)\" is not writable. Writable accounts: \(configured ?? "On My Mac") (set INKNOTES_WRITABLE_ACCOUNTS).")
         }
     }
 

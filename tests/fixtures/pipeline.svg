@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 130">
-  <!-- The sync path: nnote → Mac database → Notes.app → iCloud → iPhone. -->
+  <!-- The sync path: inknotes → Mac database → Notes.app → iCloud → iPhone. -->
   <g stroke="#1f6feb" stroke-width="3" fill="none">
     <rect x="10" y="35" width="80" height="50" rx="8"/>
     <rect x="125" y="35" width="80" height="50" rx="8"/>
@@ -15,7 +15,7 @@
   </g>
   <path d="M322 75 h30" stroke="#f59e0b" stroke-width="3" fill="none"/>
   <g font-size="13" text-anchor="middle" dominant-baseline="middle" fill="#0f172a">
-    <text x="50" y="60">nnote</text>
+    <text x="50" y="60">inknotes</text>
     <text x="165" y="60">Mac 数据库</text>
     <text x="280" y="60">Notes.app</text>
     <text x="400" y="69">iCloud</text>

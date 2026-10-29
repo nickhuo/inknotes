@@ -1,9 +1,9 @@
-// nnote: read and edit Apple Notes natively through Notes' private NotesShared
+// inknotes: read and edit Apple Notes natively through Notes' private NotesShared
 // framework. This file is the command-line interface: arguments, commands, help.
 
 import Foundation
 
-let version = "0.3.1"
+let version = "0.4.0"
 
 // MARK: - Arguments
 
@@ -30,7 +30,7 @@ struct Args {
     }
 
     func need(_ i: Int, _ what: String) -> String {
-        if positional.count <= i { fail("usage", "Missing \(what). Run `nnote help`.") }
+        if positional.count <= i { fail("usage", "Missing \(what). Run `inknotes help`.") }
         return positional[i]
     }
 
@@ -157,7 +157,7 @@ func cmdCheck(_ a: Args) {
     let plan: [String: Any] = ["action": done ? "check" : "uncheck", "paragraph": p, "note": noteSummary(note)]
     Store.guardWritable(note)
     if todo["done"] as? Bool == done { emit(["changed": false, "reason": "already in that state", "plan": plan]); return }
-    writeNote(a, note, plan: plan, reason: "nnote check") {
+    writeNote(a, note, plan: plan, reason: "inknotes check") {
         let text = bodyText(note)
         let range = paragraphRanges(text)[index]
         guard let style = styleAt(text, range.range), let current = style.todo() else { fail("not_a_todo", "Paragraph \(index) is not a checklist item.") }
@@ -177,7 +177,7 @@ func cmdSetStyle(_ a: Args) {
     let paragraphs = paragraphsJSON(bodyText(note))
     let index = findParagraph(paragraphs, text: a.positional(1), index: a.options["index"])
     let plan: [String: Any] = ["action": "set-style", "style": styleArg!.lowercased(), "paragraph": paragraphs[index], "note": noteSummary(note)]
-    writeNote(a, note, plan: plan, reason: "nnote set-style") {
+    writeNote(a, note, plan: plan, reason: "inknotes set-style") {
         let text = bodyText(note)
         let range = paragraphRanges(text)[index]
         // Keep the paragraph's identity (its UUID), so paragraph links keep working.
@@ -220,7 +220,7 @@ func cmdFormat(_ a: Args) {
     }
     if target.length == 0 { fail("bad_text", "The paragraph is empty.") }
     let plan: [String: Any] = ["action": "format", "changes": changes, "text": ns.substring(with: target), "paragraph": paragraphs[index], "note": noteSummary(note)]
-    writeNote(a, note, plan: plan, reason: "nnote format") {
+    writeNote(a, note, plan: plan, reason: "inknotes format") {
         let text = bodyText(note)
         text.enumerateAttributes(in: target) { attrs, r, _ in
             if attrs[Key.attachment] != nil { return }
@@ -245,7 +245,7 @@ func cmdAddTodo(_ a: Args) {
     var after = a.afterParagraph(note)
     if after < 0, let last = paragraphs.last(where: { $0["todo"] != nil }) { after = last["index"] as! Int }  // after the last to-do
     let plan: [String: Any] = ["action": "add-todo", "text": text, "after_paragraph": after >= 0 ? paragraphs[after] : "end of note", "note": noteSummary(note)]
-    writeNote(a, note, plan: plan, reason: "nnote add-todo") {
+    writeNote(a, note, plan: plan, reason: "inknotes add-todo") {
         let body = bodyText(note)
         let base = after >= 0 ? styleAt(body, paragraphRanges(body)[after].range) : nil
         let indent = base?.style() == Style.checklist ? base!.indent() : 0
@@ -260,7 +260,7 @@ func cmdAddTag(_ a: Args) {
     let tag = a.need(1, "tag").trimmingCharacters(in: CharacterSet(charactersIn: "# "))
     if tag.isEmpty || tag.rangeOfCharacter(from: .whitespacesAndNewlines) != nil { fail("bad_tag", "A tag is one word without spaces.") }
     let after = a.afterParagraph(note)
-    writeNote(a, note, plan: ["action": "add-tag", "tag": "#" + tag, "note": noteSummary(note)], reason: "nnote add-tag") {
+    writeNote(a, note, plan: ["action": "add-tag", "tag": "#" + tag, "note": noteSummary(note)], reason: "inknotes add-tag") {
         insertParagraphs(note, after: after, paragraph(makeTag(note, tag), style: newStyle(Style.body), newline: false))
     }
 }
@@ -279,7 +279,7 @@ func cmdLink(_ a: Args) {
     let after = a.afterParagraph(note)
     let plan: [String: Any] = ["action": toParagraph ? "link-paragraph" : "link", "note": noteSummary(note), "target": noteSummary(target),
                                "target_paragraph": targetParagraph ?? NSNull()]
-    writeNote(a, note, plan: plan, reason: "nnote link") {
+    writeNote(a, note, plan: plan, reason: "inknotes link") {
         let link = makeNoteLink(note, target, paragraphID: (targetParagraph?["paragraph_id"] as? String).flatMap(UUID.init(uuidString:)),
                                 paragraphName: targetParagraph?["text"] as? String)
         insertParagraphs(note, after: after, paragraph(link, style: newStyle(Style.body), newline: false))
@@ -293,7 +293,7 @@ func cmdAddTable(_ a: Args) {
     if tsv.isEmpty { fail("bad_table", "The table is empty.") }
     let rows = tsv.components(separatedBy: "\n").map { $0.components(separatedBy: "\t") }
     let after = a.afterParagraph(note)
-    writeNote(a, note, plan: ["action": "add-table", "rows": rows, "note": noteSummary(note)], reason: "nnote add-table") {
+    writeNote(a, note, plan: ["action": "add-table", "rows": rows, "note": noteSummary(note)], reason: "inknotes add-table") {
         insertParagraphs(note, after: after, paragraph(makeTable(note, rows), style: newStyle(Style.body), newline: false))
     }
 }
@@ -303,7 +303,7 @@ func cmdAttach(_ a: Args) {
     let path = a.need(1, "file")
     if !FileManager.default.isReadableFile(atPath: (path as NSString).expandingTildeInPath) { fail("file_not_found", "Cannot read \(path).") }
     let after = a.afterParagraph(note)
-    writeNote(a, note, plan: ["action": "attach", "file": path, "note": noteSummary(note)], reason: "nnote attach") {
+    writeNote(a, note, plan: ["action": "attach", "file": path, "note": noteSummary(note)], reason: "inknotes attach") {
         insertParagraphs(note, after: after, paragraph(makeFile(note, path), style: newStyle(Style.body), newline: false))
     }
 }
@@ -313,7 +313,7 @@ func cmdAddURL(_ a: Args) {
     let url = a.need(1, "URL")
     if (URL(string: url)?.scheme ?? "").isEmpty { fail("bad_url", "Not a URL: \(url)") }
     let after = a.afterParagraph(note)
-    writeNote(a, note, plan: ["action": "add-url", "url": url, "note": noteSummary(note)], reason: "nnote add-url") {
+    writeNote(a, note, plan: ["action": "add-url", "url": url, "note": noteSummary(note)], reason: "inknotes add-url") {
         insertParagraphs(note, after: after, paragraph(makeURLCard(note, url), style: newStyle(Style.body), newline: false))
     }
 }
@@ -329,7 +329,7 @@ func cmdDraw(_ a: Args) {
     }
     let after = a.afterParagraph(note)
     let plan: [String: Any] = ["action": "draw", "svg": svg, "drawing": stats, "options": options, "note": noteSummary(note)]
-    writeNote(a, note, plan: plan, reason: "nnote draw") {
+    writeNote(a, note, plan: plan, reason: "inknotes draw") {
         let object = makeDrawing(note, svg: svg, options: options)
         let attachment = object.attribute(Key.attachment, at: 0, effectiveRange: nil) as AnyObject
         // The paper helper may place the attachment in the text itself.
@@ -349,7 +349,7 @@ func cmdPin(_ a: Args) {
     Store.requireSelectors(note, ["setIsPinned:"])
     let n = view(note, as: ICNote.self)
     n.setIsPinned(pin)
-    n.updateChangeCount(reason: pin ? "nnote pin" : "nnote unpin")
+    n.updateChangeCount(reason: pin ? "inknotes pin" : "inknotes unpin")
     Store.saveAndNotify()
     emit(["changed": true, "plan": plan, "note": noteSummary(note)])
 }
@@ -374,7 +374,7 @@ func cmdCreateFolder(_ a: Args) {
     }
     let f = view(folder, as: ICFolder.self)
     f.setTitle(title)
-    if responds(folder, "updateChangeCountWithReason:") { f.updateChangeCount(reason: "nnote create-folder") }
+    if responds(folder, "updateChangeCountWithReason:") { f.updateChangeCount(reason: "inknotes create-folder") }
     Store.saveAndNotify()
     emit(["changed": true, "plan": plan, "folder": ["id": kv(folder, "identifier") ?? "", "path": folderPath(folder)]])
 }
@@ -394,7 +394,7 @@ func cmdCreate(_ a: Args) {
     guard let note = NotesShared.classObject("ICNote", as: ICNoteClass.self).newEmptyNote(in: folder) else {
         fail("create_failed", "Notes did not create the note.")
     }
-    Store.commit(note, reason: "nnote create") { _ in insertParagraphs(note, after: -1, renderBlocks(blocks, note: note, account: account)) }
+    Store.commit(note, reason: "inknotes create") { _ in insertParagraphs(note, after: -1, renderBlocks(blocks, note: note, account: account)) }
     emit(["changed": true, "plan": plan, "note": noteJSON(note)])
 }
 
@@ -406,15 +406,15 @@ func cmdAppend(_ a: Args) {
     let account = kv(note, "account") as AnyObject
     let after = a.afterParagraph(note)
     let plan: [String: Any] = ["action": "append", "blocks": planBlocks(blocks, account: account), "note": noteSummary(note)]
-    writeNote(a, note, plan: plan, reason: "nnote append") { insertParagraphs(note, after: after, renderBlocks(blocks, note: note, account: account)) }
+    writeNote(a, note, plan: plan, reason: "inknotes append") { insertParagraphs(note, after: after, renderBlocks(blocks, note: note, account: account)) }
 }
 
 // MARK: - Main
 
 let help = """
-nnote: read and edit Apple Notes natively.
+inknotes: read and edit Apple Notes natively.
 Every command prints JSON. Write commands are dry runs unless --apply is given.
-Writes only touch notes in NNOTE_WRITABLE_ACCOUNTS (comma-separated, default "On My Mac").
+Writes only touch notes in INKNOTES_WRITABLE_ACCOUNTS (comma-separated, default "On My Mac").
 <note> is a note id (UUID), an x-coredata:// URI, or a numeric primary key. <item> is a paragraph's text.
 Placement: --after <item> or --index N puts new content after that paragraph; otherwise at the end.
 
@@ -464,7 +464,7 @@ case nil, "help", "--help":
 case "version":
     emit(["version": version])
 case let command?:
-    guard let run = reads[command] ?? writes[command] else { fail("usage", "Unknown command \"\(command)\". Run `nnote help`.") }
+    guard let run = reads[command] ?? writes[command] else { fail("usage", "Unknown command \"\(command)\". Run `inknotes help`.") }
     // Reads and dry runs open the store read-only.
     Store.open(writable: writes[command] != nil && args.apply)
     Store.moc.performAndWait { run(args) }

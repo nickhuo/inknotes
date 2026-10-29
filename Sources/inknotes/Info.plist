@@ -5,8 +5,8 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>dev.nnote.cli</string>
+    <string>dev.inknotes.cli</string>
     <key>CFBundleName</key>
-    <string>nnote</string>
+    <string>inknotes</string>
 </dict>
 </plist>

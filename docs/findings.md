@@ -79,8 +79,8 @@ style2 = [style mutableCopy]; [style2 setTodo:todo2]
 
 **Files**
 
-The spike's tools (`spike/probe.m`, `toggle.m`, `dump.m`, `survey.m`, `emphasis.m`, and the fingerprint scripts) were folded into `nnote` and its e2e tests, and removed. They are in the first commit (`9f69448`). `scripts/backup-notestore.sh` remains: a consistent `sqlite3 .backup` of the store into `~/Downloads`, with an integrity check.
+The spike's tools (`spike/probe.m`, `toggle.m`, `dump.m`, `survey.m`, `emphasis.m`, and the fingerprint scripts) were folded into `inknotes` and its e2e tests, and removed. They are in the first commit (`9f69448`). `scripts/backup-notestore.sh` remains: a consistent `sqlite3 .backup` of the store into `~/Downloads`, with an integrity check.
 
-**Test container (found later):** `+[ICNoteContext useContainerNamed:]` moves Notes' whole store to `…/group.com.apple.notes/Containers/<name>/NoteStore.sqlite`, the mechanism behind Notes' own UI-test launch arguments (`-Container X -ResetContainer 1`). `+[ICAccount newLocalAccountInContext:]` gives a fresh container an On My Mac account. (`+[ICNoteContext enableLocalAccount]` only sets the shared `LocalNotes` preference, so `nnote` doesn't call it.) The e2e tests run in such a container.
+**Test container (found later):** `+[ICNoteContext useContainerNamed:]` moves Notes' whole store to `…/group.com.apple.notes/Containers/<name>/NoteStore.sqlite`, the mechanism behind Notes' own UI-test launch arguments (`-Container X -ResetContainer 1`). `+[ICAccount newLocalAccountInContext:]` gives a fresh container an On My Mac account. (`+[ICNoteContext enableLocalAccount]` only sets the shared `LocalNotes` preference, so `inknotes` doesn't call it.) The e2e tests run in such a container.
 
 **Related prior art:** NotesCTL (Federico Viticci, MacStories) is a closed preview with an open-source release announced. RemCTL (`viticci/remctl`, open source) uses the same overall design for Reminders: a signed host app holds the permissions, reads go straight to SQLite, writes go through Apple's private framework, and it never writes the database directly.

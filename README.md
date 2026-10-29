@@ -1,17 +1,18 @@
-# nnote
+# inknotes
 
 A command-line tool for agents to read and edit Apple Notes **natively**. It works through Notes' own private framework (NotesShared), so it can do what AppleScript can't: real checklists, `#tags`, links between notes and to single paragraphs, tables, headings, highlights, pinning, subfolders, link cards, file attachments, and editable PencilKit drawings made from SVG. It can also build a whole note from Markdown, such as a research report.
 
 - Every command prints JSON to stdout. Errors print `{"error": code, "message": …}` to stderr with exit code 1. `read --format markdown` prints Markdown instead.
 - Write commands are **dry runs** unless `--apply` is passed. A dry run validates everything (paragraphs, link targets, files, SVGs), prints the plan, and opens the database read-only.
-- Writes only touch accounts listed in `NNOTE_WRITABLE_ACCOUNTS` (comma-separated). The default is `On My Mac`, because syncing changes made this way to iCloud is untested.
+- Writes only touch accounts listed in `INKNOTES_WRITABLE_ACCOUNTS` (comma-separated). The default is `On My Mac`; set it to `iCloud` (or `On My Mac,iCloud`) to write to iCloud. In tests, Notes.app uploaded new notes and edits made this way within 15–90 seconds, though one edit once waited several minutes.
+- Renamed from `nnote` in 0.4.0: the binary is `inknotes` and the environment variables start with `INKNOTES_`.
 
 ## Requirements
 
 - macOS 27.2. The private methods were found on build 26B5112a. Each call checks the method exists and fails with `unsupported_macos` if it doesn't.
-- **Full Disk Access** for the process that runs `nnote`; without it you get `no_access`. In Claude's desktop app, only its Terminal panel inherits the grant given to Claude.app.
-- Build: `zsh build.sh` builds `build/nnote`, a Swift package built with `swift build` (Swift 6 from the Command Line Tools). `zsh build.sh install` also copies it to `~/.local/bin`.
-- `NNOTE_CONTAINER=<name>` makes `nnote` use a separate store at `~/Library/Group Containers/group.com.apple.notes/Containers/<name>/` instead of your notes. The tests use this; see [Development](#development).
+- **Full Disk Access** for the process that runs `inknotes`; without it you get `no_access`. In Claude's desktop app, only its Terminal panel inherits the grant given to Claude.app.
+- Build: `zsh build.sh` builds `build/inknotes`, a Swift package built with `swift build` (Swift 6 from the Command Line Tools). `zsh build.sh install` also copies it to `~/.local/bin`.
+- `INKNOTES_CONTAINER=<name>` makes `inknotes` use a separate store at `~/Library/Group Containers/group.com.apple.notes/Containers/<name>/` instead of your notes. The tests use this; see [Development](#development).
 
 ## References
 
@@ -79,19 +80,19 @@ Blank lines become one empty paragraph.
 
 ```json
 {
-  "id": "…", "uri": "x-coredata://…/ICNote/p21311", "title": "nnote research report",
-  "account": "On My Mac", "folder": "nnote Tests/Reports", "pinned": false, "modified": "2026-10-25T09:17:10Z",
+  "id": "…", "uri": "x-coredata://…/ICNote/p21311", "title": "inknotes research report",
+  "account": "On My Mac", "folder": "inknotes Tests/Reports", "pinned": false, "modified": "2026-10-25T09:17:10Z",
   "paragraphs": [
     {"index": 3, "style": "body", "paragraph_id": "…", "text": "Text can be bold, italic, …",
      "formats": [{"text": "bold", "bold": true}, {"text": "highlighted", "highlight": "purple"}, {"text": "web link", "link": "https://…"}]},
     {"index": 9, "style": "bullet", "indent": 1, "text": "nested bullet under item 2"},
     {"index": 13, "style": "body", "quote": 1, "text": "A quote, kept as a Notes block quote."},
     {"index": 17, "style": "checklist", "text": "Does iCloud sync these changes?", "todo": {"done": false, "uuid": "…"}},
-    {"index": 26, "style": "body", "text": "Related: NotesShared link target and NotesShared smoke test → alpha #nnotereport",
+    {"index": 26, "style": "body", "text": "Related: NotesShared link target and NotesShared smoke test → alpha #inknotesreport",
      "attachments": [
        {"type": "link", "text": "NotesShared link target", "target": "applenotes:note/b1c37457-…"},
        {"type": "link", "text": "NotesShared smoke test → alpha", "target": "applenotes://showNote?identifier=…&paragraphID=A7600BB9-…"},
-       {"type": "tag", "text": "#nnotereport"}]},
+       {"type": "tag", "text": "#inknotesreport"}]},
     {"index": 22, "style": "body", "text": "[table]", "attachments": [{"type": "table", "rows": [["Feature", "Status"]]}]}
   ]
 }
@@ -109,9 +110,9 @@ Error codes: `usage`, `no_access`, `note_not_found`, `ambiguous_note`, `folder_n
 
 **Write a research report:**
 1. Write the report as Markdown, linking existing notes with `[[Title]]`, drawings as `![](figure.svg)`, and sources as bare URLs (link cards) or `[text](url)`.
-2. `nnote create --folder Research --markdown report.md` to validate. The plan lists every block and every resolved link; it fails on a missing note, file or invalid SVG.
+2. `inknotes create --folder Research --markdown report.md` to validate. The plan lists every block and every resolved link; it fails on a missing note, file or invalid SVG.
 3. Run it again with `--apply`.
-4. Use `nnote backlinks <report>` later to see what refers to it.
+4. Use `inknotes backlinks <report>` later to see what refers to it.
 
 ## How a write works
 
@@ -135,7 +136,7 @@ Character formatting is stored as text attributes: `TTHints` (bit 1 bold, bit 2 
 |---|---|
 | Checklists: add, check, uncheck | Notes.app shows them; to-dos keep their UUID |
 | Tags, note links, tables | Native objects; the links open their notes |
-| Folders | Created "nnote Tests" and the subfolder "nnote Tests/Reports" |
+| Folders | Created "inknotes Tests" and the subfolder "inknotes Tests/Reports" |
 | Report from Markdown (`tests/fixtures/report.md`) | One note with headings, inline formatting, nested lists, quote, to-dos, code block, table, divider, note link, paragraph link, tag, link card, image and drawing, all created in one save and rendered correctly |
 | Pin, set-style, bold/italic/underline on parts of a line | Rendered correctly |
 | Highlights 1–5 | Rendered as purple, pink, orange, mint and blue; color names work in `format` and in Markdown, and `read` reports them |
@@ -146,7 +147,7 @@ After each write, a row-by-row diff of the database showed changes only to On My
 
 After the Swift rewrite (0.3.0), the installed binary created the report fixture and its link target in On My Mac. Notes.app rendered all of it correctly: headings, formatting, highlights, lists, quote, to-dos, code, table, divider, both links, tag, link card, image and drawing.
 
-These rendering checks were done by hand in Notes.app. Regressions in what `nnote` writes and reads are caught by the e2e tests below.
+These rendering checks were done by hand in Notes.app. Regressions in what `inknotes` writes and reads are caught by the e2e tests below.
 
 ## Development
 
@@ -154,14 +155,14 @@ These rendering checks were done by hand in Notes.app. Regressions in what `nnot
 
 | Path | Module | Interface |
 |---|---|---|
-| `Sources/nnote/main.swift` | CLI | Commands, arguments, help |
-| `Sources/nnote/NotesShared.swift` | The private API | Every NotesShared method nnote calls, declared as an `@objc protocol` with its exact selector. Objects are viewed through these protocols, so each message send is type-checked |
-| `Sources/nnote/Store.swift` | The Notes store | Open (read-only or writable), look up notes, folders and accounts, write guards, `commit` (one edit, saved the way Notes saves it). The seam to Notes: your store, or a test container |
-| `Sources/nnote/Document.swift` | A note's text | Paragraph JSON, finding a paragraph, inserting paragraphs, paragraph styles |
-| `Sources/nnote/Objects.swift` | Native objects | Make a tag, note or paragraph link, table, file, link card, drawing or divider in a note |
-| `Sources/nnote/Markdown.swift` | Markdown | Parse, plan (dry run), render into a note, export |
-| `Sources/nnote/SVG.swift` | SVG | SVG file → PencilKit drawing |
-| `Sources/nnote/Core.swift` | Shared | Attribute keys, style and highlight names, JSON output and errors |
+| `Sources/inknotes/main.swift` | CLI | Commands, arguments, help |
+| `Sources/inknotes/NotesShared.swift` | The private API | Every NotesShared method inknotes calls, declared as an `@objc protocol` with its exact selector. Objects are viewed through these protocols, so each message send is type-checked |
+| `Sources/inknotes/Store.swift` | The Notes store | Open (read-only or writable), look up notes, folders and accounts, write guards, `commit` (one edit, saved the way Notes saves it). The seam to Notes: your store, or a test container |
+| `Sources/inknotes/Document.swift` | A note's text | Paragraph JSON, finding a paragraph, inserting paragraphs, paragraph styles |
+| `Sources/inknotes/Objects.swift` | Native objects | Make a tag, note or paragraph link, table, file, link card, drawing or divider in a note |
+| `Sources/inknotes/Markdown.swift` | Markdown | Parse, plan (dry run), render into a note, export |
+| `Sources/inknotes/SVG.swift` | SVG | SVG file → PencilKit drawing |
+| `Sources/inknotes/Core.swift` | Shared | Attribute keys, style and highlight names, JSON output and errors |
 | `tests/` | e2e tests | Every command through the CLI |
 | `scripts/backup-notestore.sh` | | Backs up the real store before any manual test against it |
 | `docs/findings.md` | | How the private API was found, and the first spike |
@@ -172,12 +173,12 @@ These rendering checks were done by hand in Notes.app. Regressions in what `nnot
 uv run pytest
 ```
 
-- The suite builds `build/nnote` and runs every command through its JSON interface: all writes, their dry runs, and their error codes. Set `NNOTE_BIN` to test another binary.
-- It runs against a fresh store in the test container `nnote-e2e`, which it deletes before and after the run (`NNOTE_E2E_KEEP=1` keeps it).
+- The suite builds `build/inknotes` and runs every command through its JSON interface: all writes, their dry runs, and their error codes. Set `INKNOTES_BIN` to test another binary.
+- It runs against a fresh store in the test container `inknotes-e2e`, which it deletes before and after the run (`INKNOTES_E2E_KEEP=1` keeps it).
 - It refuses to start if that store isn't empty. At the end, it checks that your real store has the same objects and note bodies as before.
 - It needs Full Disk Access (Claude's Terminal panel has it); without it, it stops with a message.
 - Every change should keep `uv run pytest` green. A new command or option needs a test in `tests/e2e_test.py`.
-- The tests only talk to the CLI, so they don't depend on the implementation language. Version 0.3.0 rewrote nnote from Objective-C into Swift; the same 23 tests passed unchanged before and after.
+- The tests only talk to the CLI, so they don't depend on the implementation language. Version 0.3.0 rewrote inknotes from Objective-C into Swift; the same 23 tests passed unchanged before and after.
 
 ### Calling a private method
 
@@ -185,10 +186,10 @@ Declare it in `NotesShared.swift`, with the selector written out, on the protoco
 
 ## Not supported or untested
 
-- **iCloud:** untested. It's blocked by default; add it to `NNOTE_WRITABLE_ACCOUNTS` only after testing sync.
+- **iCloud:** untested. It's blocked by default; add it to `INKNOTES_WRITABLE_ACCOUNTS` only after testing sync.
 - Not supported: deleting or moving notes, paragraphs or attachments; editing table cells; text color; locked notes.
 - **SVG:** strokes only, so fills become outlines; gradients, `<use>` and CSS classes are ignored. Rounded rectangles (`rx`, `ry`) are supported. `<text>` and `<tspan>` are drawn as hollow glyph outlines in their fill color (CoreText, so Chinese falls back to PingFang), with `font-size`, `font-family`, bold, `text-anchor` and `dominant-baseline="middle"`. The dry run reports `text` (elements) and `glyphs` (characters drawn).
-- **Bundle identifier:** PencilKit stores per-app state under the bundle identifier and crashes in a process without one, so the binary embeds `Sources/nnote/Info.plist` (`dev.nnote.cli`).
-- **Drawing fidelity:** PencilKit treats stroke points as spline control points and its point size is not the drawn width, so nnote samples every edge densely and converts each SVG stroke width into the size that ink draws at. Measured on the test fixtures: the pen stays within 0.7 pt of the outline at 0.98–1.04× the SVG width; pencil is 0.7–1.2× (textured edge); marker is 0.6–1.4× (a chisel nib, thinner across horizontal lines). The e2e tests check these bounds.
+- **Bundle identifier:** PencilKit stores per-app state under the bundle identifier and crashes in a process without one, so the binary embeds `Sources/inknotes/Info.plist` (`dev.inknotes.cli`).
+- **Drawing fidelity:** PencilKit treats stroke points as spline control points and its point size is not the drawn width, so inknotes samples every edge densely and converts each SVG stroke width into the size that ink draws at. Measured on the test fixtures: the pen stays within 0.7 pt of the outline at 0.98–1.04× the SVG width; pencil is 0.7–1.2× (textured edge); marker is 0.6–1.4× (a chisel nib, thinner across horizontal lines). The e2e tests check these bounds.
 - **Link cards:** the URL is stored. Cards made before version 0.2.2 have no URL and show up empty. Whether Notes.app fetches the preview for a card added while it was closed hasn't been checked.
 - Links between accounts (On My Mac → iCloud) haven't been tried.

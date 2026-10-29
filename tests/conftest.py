@@ -1,13 +1,13 @@
 """Shared setup for the end-to-end tests.
 
-The tests drive the real `nnote` binary against a separate Notes store
-(NNOTE_CONTAINER, Notes' own test-container mechanism), so they never touch
+The tests drive the real `inknotes` binary against a separate Notes store
+(INKNOTES_CONTAINER, Notes' own test-container mechanism), so they never touch
 your notes. Run them from a process with Full Disk Access:
 
     uv run pytest
 
-Set NNOTE_BIN to test an existing binary instead of building one, and
-NNOTE_E2E_KEEP=1 to keep the test store for inspection.
+Set INKNOTES_BIN to test an existing binary instead of building one, and
+INKNOTES_E2E_KEEP=1 to keep the test store for inspection.
 """
 
 import hashlib
@@ -26,37 +26,37 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures"
 GROUP = Path.home() / "Library/Group Containers/group.com.apple.notes"
 REAL_STORE = GROUP / "NoteStore.sqlite"
-CONTAINER = "nnote-e2e"
+CONTAINER = "inknotes-e2e"
 TEST_STORE_DIR = GROUP / "Containers" / CONTAINER
 FOLDER = "E2E"
 
 
-class NNoteError(Exception):
+class InkNotesError(Exception):
     def __init__(self, code: str, message: str):
         super().__init__(f"{code}: {message}")
         self.code = code
 
 
-class NNote:
-    """Runs the nnote binary inside the test container."""
+class InkNotes:
+    """Runs the inknotes binary inside the test container."""
 
     def __init__(self, binary: Path):
         self.binary = binary
 
     def raw(self, *args: str, stdin: str | None = None, env: dict | None = None) -> subprocess.CompletedProcess:
-        # The caller's NNOTE_WRITABLE_ACCOUNTS must not leak in; tests set it explicitly.
-        full_env = {k: v for k, v in os.environ.items() if k != "NNOTE_WRITABLE_ACCOUNTS"}
-        full_env.update({"NNOTE_CONTAINER": CONTAINER, **(env or {})})
+        # The caller's INKNOTES_WRITABLE_ACCOUNTS must not leak in; tests set it explicitly.
+        full_env = {k: v for k, v in os.environ.items() if k != "INKNOTES_WRITABLE_ACCOUNTS"}
+        full_env.update({"INKNOTES_CONTAINER": CONTAINER, **(env or {})})
         return subprocess.run([str(self.binary), *args], input=stdin, capture_output=True, text=True, env=full_env, timeout=120)
 
     def __call__(self, *args: str, stdin: str | None = None, env: dict | None = None):
-        """Runs a command and returns its JSON, or raises NNoteError."""
+        """Runs a command and returns its JSON, or raises InkNotesError."""
         p = self.raw(*args, stdin=stdin, env=env)
         if p.returncode != 0:
             err = next((json.loads(l) for l in reversed(p.stderr.splitlines()) if l.startswith('{"error"')), None)
             if err is None:
-                raise AssertionError(f"nnote {' '.join(args)} failed without a JSON error:\n{p.stderr[-3000:]}")
-            raise NNoteError(err["error"], err["message"])
+                raise AssertionError(f"inknotes {' '.join(args)} failed without a JSON error:\n{p.stderr[-3000:]}")
+            raise InkNotesError(err["error"], err["message"])
         return json.loads(p.stdout)
 
     def markdown(self, note: str) -> str:
@@ -113,21 +113,21 @@ def write_png(path: Path) -> Path:
 
 @pytest.fixture(scope="session")
 def binary() -> Path:
-    if os.environ.get("NNOTE_BIN"):
-        return Path(os.environ["NNOTE_BIN"]).resolve()
+    if os.environ.get("INKNOTES_BIN"):
+        return Path(os.environ["INKNOTES_BIN"]).resolve()
     subprocess.run(["zsh", str(ROOT / "build.sh")], check=True, capture_output=True)
-    return ROOT / "build" / "nnote"
+    return ROOT / "build" / "inknotes"
 
 
 @pytest.fixture(scope="session")
-def nnote(binary: Path):
+def inknotes(binary: Path):
     """A fresh test store with one folder, E2E; the real store must stay untouched."""
     try:
         before = real_store_fingerprint()
     except sqlite3.OperationalError as e:
         pytest.exit(f"Cannot read the Notes database ({e}). Run the tests from a process with Full Disk Access.", 2)
     shutil.rmtree(TEST_STORE_DIR, ignore_errors=True)
-    nn = NNote(binary)
+    nn = InkNotes(binary)
     nn("create-folder", FOLDER, "--apply")
     # Guard against the container seam silently falling back to the real store.
     paths = sorted(f["path"] for f in nn("folders")["folders"])
@@ -135,5 +135,5 @@ def nnote(binary: Path):
         pytest.exit(f"The test store is not empty (folders: {paths}); refusing to continue.", 2)
     yield nn
     assert real_store_fingerprint() == before, "the real Notes store changed during the tests"
-    if not os.environ.get("NNOTE_E2E_KEEP"):
+    if not os.environ.get("INKNOTES_E2E_KEEP"):
         shutil.rmtree(TEST_STORE_DIR, ignore_errors=True)

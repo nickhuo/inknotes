@@ -1,6 +1,6 @@
 // Notes' private NotesShared framework, as typed Swift.
 //
-// The framework ships no headers, so each method nnote uses is declared here
+// The framework ships no headers, so each method inknotes uses is declared here
 // as an @objc protocol requirement with its exact selector, and objects are
 // viewed through these protocols with `view(_:as:)`. The compiler then emits
 // correctly typed message sends. Class methods are declared on "...Class"
