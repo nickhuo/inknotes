@@ -126,6 +126,47 @@ func cmdFolders(_ a: Args) {
     emit(["folders": out, "count": out.count])
 }
 
+func cmdSearch(_ a: Args) {
+    let query = a.need(0, "search query")
+    var notes = Store.visibleNotes()
+    if let account = a.options["account"] {
+        notes = notes.filter { (kvPath($0, "account.name") as? String ?? "").caseInsensitiveCompare(account) == .orderedSame }
+    }
+    if let f = a.options["folder"] {
+        notes = notes.filter { n in
+            let folder = kv(n, "folder") as AnyObject?
+            return folderPath(folder).caseInsensitiveCompare(f) == .orderedSame || kv(folder, "identifier") as? String == f
+        }
+    }
+    let limit = a.options["limit"].flatMap { Int($0) } ?? 20
+    var results: [[String: Any]] = []
+    for note in notes {
+        let body = bodyText(note).string
+        guard let range = body.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) else { continue }
+        var entry = noteSummary(note)
+        entry["snippet"] = searchSnippet(body, around: range)
+        results.append(entry)
+        if results.count >= limit { break }
+    }
+    emit(["notes": results, "count": results.count])
+}
+
+func searchSnippet(_ body: String, around range: Range<String.Index>) -> String {
+    let pad = 80
+    let lo = body.distance(from: body.startIndex, to: range.lowerBound)
+    let hi = body.distance(from: body.startIndex, to: range.upperBound)
+    let startOff = max(0, lo - pad)
+    let endOff = min(body.count, hi + pad)
+    let start = body.index(body.startIndex, offsetBy: startOff)
+    let end = body.index(body.startIndex, offsetBy: endOff)
+    var snippet = String(body[start..<end])
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .replacingOccurrences(of: "\n", with: " ")
+    if startOff > 0 { snippet = "…" + snippet }
+    if endOff < body.count { snippet += "…" }
+    return snippet
+}
+
 func cmdTags(_ a: Args) {
     let attachments = Store.fetch("ICInlineAttachment", NSPredicate(format: "typeUTI == %@ AND markedForDeletion == NO", UTI.hashtag))
     var byTag: [String: (tag: String, account: String, notes: Set<String>)] = [:]
@@ -420,6 +461,7 @@ Placement: --after <item> or --index N puts new content after that paragraph; ot
 
 Read
   find [text] [--folder PATH|ID] [--account A] [--tag T] [--pinned 1] [--limit N]
+  search <query> [--folder PATH|ID] [--account A] [--limit N]   full-text search over note bodies
   read <note> [--format json|markdown]
   backlinks <note>                       notes that link to this note or its paragraphs
   folders [--account A]                  folders and subfolders with paths and note counts
@@ -450,7 +492,7 @@ Needs Full Disk Access for the process that runs it. Built against macOS 27.2.
 
 """
 
-let reads: [String: (Args) -> Void] = ["find": cmdFind, "read": cmdRead, "backlinks": cmdBacklinks, "folders": cmdFolders, "tags": cmdTags]
+let reads: [String: (Args) -> Void] = ["find": cmdFind, "search": cmdSearch, "read": cmdRead, "backlinks": cmdBacklinks, "folders": cmdFolders, "tags": cmdTags]
 let writes: [String: (Args) -> Void] = [
     "check": cmdCheck, "set-style": cmdSetStyle, "format": cmdFormat, "add-todo": cmdAddTodo, "add-tag": cmdAddTag,
     "link": cmdLink, "add-table": cmdAddTable, "attach": cmdAttach, "add-url": cmdAddURL, "draw": cmdDraw,
