@@ -1,6 +1,6 @@
 ---
 name: use-apple-notes
-description: Manage the user's Apple Notes knowledge base (AI context, knowledge and task management) from the terminal with the inknotes CLI, which edits notes natively (checklists, tags, note and paragraph links, tables, headings, highlights, drawings). Use when the user asks to create, read, edit, search, or link Apple Notes, capture something to their notes, write a report into Notes, review a note's links/backlinks, or manage tasks and knowledge stored in Apple Notes.
+description: Manage the user's Apple Notes knowledge base (AI context, knowledge and task management) from the terminal with the inknotes CLI, which edits notes natively (checklists, tags, note and paragraph links, tables, headings, highlights, drawings). Use when the user asks to create, read, edit, search, or link Apple Notes, capture something to their notes, write a report into Notes, review a note's links/backlinks, or manage tasks and knowledge stored in Apple Notes. Open a note directly in Notes.app with notes://showNote?identifier=<id>.
 ---
 
 # Apple Notes knowledge base
@@ -24,6 +24,7 @@ Apple Notes is the user's personal knowledge base: AI context, knowledge managem
 
 ```bash
 inknotes find "words in the title" [--folder "A/B"] [--account iCloud] [--tag topic] [--pinned 1] [--limit N]
+inknotes search "words in the body" [--folder "A/B"] [--account iCloud] [--limit N]
 inknotes read <id>                    # JSON: paragraphs with style, to-do state, tags, links, tables, formatting
 inknotes read <id> --format markdown  # the note as Markdown
 inknotes backlinks <id>               # notes that link here, and to which paragraph
@@ -31,7 +32,7 @@ inknotes folders [--account iCloud]   # folder paths, ids, note counts
 inknotes tags [--account iCloud]      # tags and how many notes use each
 ```
 
-`find` matches titles only, not note bodies. `<id>` is the `id` from `find` (a UUID). A paragraph is named by its exact displayed `text` from `read`; when several paragraphs read the same, pass `--index N` instead of the text. With `--index`, `set-style` takes the style as `--style heading`, since there is no text argument before it.
+`find` matches titles only. `search` does full-text grep over note bodies and returns a `snippet` of matching context alongside each result. `<id>` is the `id` from `find` or `search` (a UUID). To open a note directly in Notes.app, use the deeplink `notes://showNote?identifier=<id>`. A paragraph is named by its exact displayed `text` from `read`; when several paragraphs read the same, pass `--index N` instead of the text. With `--index`, `set-style` takes the style as `--style heading`, since there is no text argument before it.
 
 ## Writing
 
