@@ -141,7 +141,8 @@ func cmdSearch(_ a: Args) {
     let limit = a.options["limit"].flatMap { Int($0) } ?? 20
     var results: [[String: Any]] = []
     for note in notes {
-        let body = bodyText(note).string
+        guard let bodyAttr = bodyTextSafe(note) else { continue }
+        let body = bodyAttr.string
         guard let range = body.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) else { continue }
         var entry = noteSummary(note)
         entry["snippet"] = searchSnippet(body, around: range)

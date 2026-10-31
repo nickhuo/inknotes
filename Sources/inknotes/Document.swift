@@ -20,6 +20,12 @@ func mergeable(_ note: AnyObject) -> ICTTMergeableString {
 
 func bodyText(_ note: AnyObject) -> NSAttributedString { mergeable(note).attributedString() }
 
+/// Returns nil instead of exiting when a note has no text object (e.g. attachment-only notes).
+func bodyTextSafe(_ note: AnyObject) -> NSAttributedString? {
+    guard let ms = view(note, as: ICNote.self).mergeableString() else { return nil }
+    return view(ms, as: ICTTMergeableString.self).attributedString()
+}
+
 func paragraphRanges(_ text: NSAttributedString) -> [Para] {
     var out: [Para] = []
     (text.string as NSString).enumerateSubstrings(in: NSRange(location: 0, length: text.length),
