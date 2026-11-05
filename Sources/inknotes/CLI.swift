@@ -107,6 +107,13 @@ struct CommandSpec {
               example: "version", minPositionals: 0, maxPositionals: 0),
     ]
 
+    static let markdownSyntax = [
+        "Markdown: # ## ### headings, paragraphs, - lists, 1. lists, - [ ] / - [x] to-dos, > quotes, ``` code,",
+        "**bold** *italic* ~~strike~~ ==highlight== =={pink}highlight== [text](url), #tags,",
+        "[[Note title]] and [[Note title#Paragraph]] links, | tables |, --- dividers,",
+        "![](file) attachments, ![](drawing.svg) drawings, and a URL alone on a line as a link card.",
+    ]
+
     static func named(_ name: String) -> CommandSpec {
         guard let spec = all.first(where: { $0.name == name }) else {
             fail("usage", "Unknown command \"\(name)\". Run `inknotes help`.")
@@ -128,6 +135,8 @@ struct CommandSpec {
         else if name == "read" { notes.append("Results are JSON by default; --format markdown prints Markdown.") }
         else if name == "help" { notes.append("Help is text and never opens Notes.") }
         else { notes.append("Results are JSON.") }
+        if maxPositionals > 0 && name != "help" { notes.append("If an argument starts with -, put -- before it. Everything after -- is literal.") }
+        if ["create", "append"].contains(name) { notes += Self.markdownSyntax }
         return """
         Usage: \(invocation)
         \(summary)
@@ -201,7 +210,8 @@ struct Args {
             if parsingOptions && token.hasPrefix("-") && token != "-" {
                 let parts = token.dropFirst(2).split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
                 guard token.hasPrefix("--"), let option = spec.acceptedOptions.first(where: { $0.name == parts[0] }) else {
-                    fail("usage", "Unknown option \(token) for \(first). Run `inknotes \(first) --help`.")
+                    let literal = spec.maxPositionals > 0 && first != "help" ? " If it is text, put -- before it." : ""
+                    fail("usage", "Unknown option \(token) for \(first).\(literal) Run `inknotes \(first) --help`.")
                 }
                 let value: String
                 if option.name == "pinned" {

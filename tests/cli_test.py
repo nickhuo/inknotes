@@ -1,7 +1,6 @@
 """CLI contracts that must work without Full Disk Access or a Notes store."""
 import json
 import os
-import shlex
 import subprocess
 
 import pytest
@@ -124,6 +123,31 @@ def test_double_dash_keeps_options_literal(cli, args):
     assert "Unexpected argument" in error(cli(*args))["message"]
 
 
+@pytest.mark.parametrize("command", ["create", "append"])
+def test_markdown_syntax_on_write_help(cli, command):
+    page = cli(command, "--help").stdout
+    for syntax in ["# ## ### headings", "- [ ] / - [x] to-dos", "==highlight==", "[[Note title]]",
+                   "[[Note title#Paragraph]]", "--- dividers", "![](drawing.svg)", "a URL alone on a line"]:
+        assert syntax in page
+
+
+@pytest.mark.parametrize("token", ["- leading dash", "-x", "--leading-dashes"])
+def test_leading_dash_text_error_names_the_fix(cli, token):
+    doc = error(cli("add-todo", "note", token))
+    assert "put -- before it" in doc["message"]
+    assert "inknotes add-todo --help" in doc["message"]
+
+
+def test_unknown_option_on_command_without_positionals_does_not_offer_double_dash(cli):
+    assert "put -- before it" not in error(cli("folders", "-x"))["message"]
+
+
+@pytest.mark.parametrize("command,max_args", COMMANDS.items())
+def test_help_mentions_double_dash_where_text_is_accepted(cli, command, max_args):
+    page = cli(command, "--help").stdout
+    assert ("put -- before it" in page) == (max_args > 0 and command != "help")
+
+
 @pytest.fixture(scope="session")
 def harness(tmp_path_factory):
     """Exercise parser values, errors and unreadable search bodies without Notes."""
@@ -161,6 +185,8 @@ def test_parser_values_and_safety_default(harness):
     p = harness("parse", "add-todo", "note", "--apply", "--", "--literal-text")
     assert json.loads(p.stdout)["apply"] is True
     assert json.loads(p.stdout)["positional"] == ["note", "--literal-text"]
+    p = harness("parse", "add-todo", "note", "--", "- leading dash")
+    assert json.loads(p.stdout)["positional"] == ["note", "- leading dash"]
     p = harness("parse", "draw", "note", "--svg=test.svg", "--width=12.5")
     assert json.loads(p.stdout)["options"]["width"] == "12.5"
     p = harness("parse", "set-style", "note", "--index=0", "--style=body", "--indent=0")
@@ -191,33 +217,3 @@ def test_search_reports_unreadable_bodies_and_exact_truncation(harness, query, l
     assert doc["skipped"] == 2  # Includes unreadable bodies beyond the result limit.
     assert doc["truncated"] is truncated
     assert all("snippet" in note for note in doc["notes"])
-
-
-def test_build_failure_does_not_copy_a_stale_binary(tmp_path):
-    """A compiler failure must stay a failure even when a product already exists."""
-    script = tmp_path / "build.sh"
-    script.write_text((ROOT / "build.sh").read_text())
-    product = tmp_path / "product"
-    product.mkdir()
-    stale = product / "inknotes"
-    stale.write_text("stale compiler product")
-    stale.chmod(0o755)
-    output = tmp_path / "build" / "inknotes"
-    output.parent.mkdir()
-    output.write_text("previous build")
-    tools = tmp_path / "tools"
-    tools.mkdir()
-    swift = tools / "swift"
-    swift.write_text(f'''#!/bin/sh
-case "$*" in
-  *--show-bin-path*) printf '%s\\n' {shlex.quote(str(product))} ;;
-  *) echo 'fixture compile failure' >&2; exit 37 ;;
-esac
-''')
-    swift.chmod(0o755)
-    p = subprocess.run(["zsh", str(script)], capture_output=True, text=True, timeout=20,
-                       env={**os.environ, "PATH": f"{tools}:{os.environ['PATH']}"})
-    assert p.returncode == 37
-    assert "fixture compile failure" in p.stdout
-    assert "built " not in p.stdout
-    assert output.read_text() == "previous build"

@@ -25,7 +25,8 @@ work before any store access; help takes precedence over other validation.
 Each command rejects unknown options and extra positional arguments before opening
 Notes. Value options accept `--name value` and `--name=value`; repeated options
 use the last value. `--` ends option parsing, so `inknotes find -- --help` searches
-for the literal title text `--help`. Switches such as `--apply` take no value.
+for the literal title text `--help`. Text that starts with `-` needs it too:
+`inknotes add-todo <note> -- '- item'`. Switches such as `--apply` take no value.
 `find --pinned`, `--pinned 1` and `--pinned=1` select pinned notes.
 
 `--limit` must be a positive integer (default 20); `--indent`, `--index` and
