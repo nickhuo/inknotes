@@ -1,5 +1,6 @@
 """End-to-end tests: every inknotes command, through its JSON interface, on a test store."""
 
+import json
 import shutil
 
 import pytest
@@ -19,9 +20,37 @@ def errors(inknotes, code: str, *args: str, **kw) -> str:
 
 def test_help_version_and_unknown_command(inknotes):
     p = inknotes.raw("help")
-    assert p.returncode == 0 and "inknotes: read and edit Apple Notes natively" in p.stdout
+    assert p.returncode == 0 and "Usage: inknotes" in p.stdout
     assert inknotes("version")["version"]
     errors(inknotes, "usage", "frobnicate")
+
+
+def test_search_truncation_and_parser_forms(inknotes):
+    first = inknotes.create("# CLI search first\nunique-cli-needle")
+    second = inknotes.create("# CLI search second\nunique-cli-needle")
+    limited = inknotes("search", "unique-cli-needle", "--limit=1")
+    assert limited["count"] == 1 and limited["truncated"] is True
+    assert limited["skipped"] == 0
+    complete = inknotes("search", "--limit=2", "--", "unique-cli-needle")
+    assert complete["count"] == 2 and complete["truncated"] is False
+    assert complete["skipped"] == 0
+    assert {n["id"] for n in complete["notes"]} == {first["id"], second["id"]}
+    empty = inknotes("search", "unique-cli-no-match")
+    assert empty["count"] == 0 and empty["truncated"] is False and empty["skipped"] == 0
+    inknotes("pin", first["id"], "--apply")
+    for options in [("--pinned",), ("--pinned", "1"), ("--pinned=1",)]:
+        assert first["id"] in [n["id"] for n in inknotes("find", "--limit=100", *options)["notes"]]
+    dry = inknotes("add-todo", first["id"], "--", "--literal-text")
+    assert dry["dry_run"] is True and dry["plan"]["text"] == "--literal-text"
+
+
+def test_missing_input_error_document_in_container(inknotes, tmp_path):
+    note = inknotes.create("# CLI missing file")
+    p = inknotes.raw("attach", note["id"], str(tmp_path / "missing.pdf"))
+    assert p.returncode == 2 and p.stdout == ""
+    doc = next(json.loads(line) for line in p.stderr.splitlines() if line.startswith('{"error"'))
+    assert doc["error"] == "file_not_found"
+    assert doc["status"] == "action_required" and doc["retryable"] is False
 
 
 def test_note_references_resolve_to_the_same_note(inknotes):

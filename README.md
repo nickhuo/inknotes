@@ -2,7 +2,7 @@
 
 A command-line tool for agents to read and edit Apple Notes **natively**. It works through Notes' own private framework (NotesShared), so it can do what AppleScript can't: real checklists, `#tags`, links between notes and to single paragraphs, tables, headings, highlights, pinning, subfolders, link cards, file attachments, and editable PencilKit drawings made from SVG. It can also build a whole note from Markdown, such as a research report.
 
-- Every command prints JSON to stdout. Errors print `{"error": code, "message": …}` to stderr with exit code 1. `read --format markdown` prints Markdown instead.
+- Results, including `version` and `--version`, print JSON to stdout; `read --format markdown` prints Markdown and help prints text. Errors print one sorted JSON line `{"error": code, "message": …, "retryable": false, "status": "action_required"|"error"}` to stderr. Exit codes: **0** success, **2** usage errors or missing input, **1** operational failures.
 - Write commands are **dry runs** unless `--apply` is passed. A dry run validates everything (paragraphs, link targets, files, SVGs), prints the plan, and opens the database read-only.
 - Writes only touch accounts listed in `INKNOTES_WRITABLE_ACCOUNTS` (comma-separated). The default is `On My Mac`; set it to `iCloud` (or `On My Mac,iCloud`) to write to iCloud. In tests, Notes.app uploaded new notes and edits made this way within 15–90 seconds, though one edit once waited several minutes.
 - Renamed from `nnote` in 0.4.0: the binary is `inknotes` and the environment variables start with `INKNOTES_`.
@@ -10,9 +10,47 @@ A command-line tool for agents to read and edit Apple Notes **natively**. It wor
 ## Requirements
 
 - macOS 27.2. The private methods were found on build 26B5112a. Each call checks the method exists and fails with `unsupported_macos` if it doesn't.
-- **Full Disk Access** for the process that runs `inknotes`; without it you get `no_access`. In Claude's desktop app, only its Terminal panel inherits the grant given to Claude.app.
+- **Full Disk Access** for the process that runs `inknotes`; store commands may fail with `no_access`. Help, version and argument validation work without it. In Claude's desktop app, only its Terminal panel inherits the grant given to Claude.app.
 - Build: `zsh build.sh` builds `build/inknotes`, a Swift package built with `swift build` (Swift 6 from the Command Line Tools). `zsh build.sh install` also copies it to `~/.local/bin`.
 - `INKNOTES_CONTAINER=<name>` makes `inknotes` use a separate store at `~/Library/Group Containers/group.com.apple.notes/Containers/<name>/` instead of your notes. The tests use this; see [Development](#development).
+
+## Help and parsing
+
+`inknotes`, `inknotes --help`, `inknotes -h` and `inknotes help` show root help.
+`inknotes <command> --help`, `inknotes <command> -h` and `inknotes help <command>`
+show that command's usage, summary, options and example. Help and `--version`
+work before any store access; help takes precedence over other validation.
+`inknotes version` and `inknotes --version` both return `{"version": "0.4.0"}`.
+
+Each command rejects unknown options and extra positional arguments before opening
+Notes. Value options accept `--name value` and `--name=value`; repeated options
+use the last value. `--` ends option parsing, so `inknotes find -- --help` searches
+for the literal title text `--help`. Switches such as `--apply` take no value.
+`find --pinned`, `--pinned 1` and `--pinned=1` select pinned notes.
+
+`--limit` must be a positive integer (default 20); `--indent`, `--index` and
+`--paragraph-index` must be non-negative integers. `--width` must be finite and
+greater than zero (default 400 points). `--format` accepts only `json` or `markdown`.
+Invalid values fail with exit 2 instead of silently choosing a default.
+
+Input and lookup errors (including missing files and resources) exit 2 with
+`status: "action_required"`. Access restrictions (`no_access`, `account_not_writable`,
+`note_locked`, `note_deleted`) exit 1 with `status: "action_required"`.
+Framework, fetch, save and object-creation failures exit 1 with `status: "error"`.
+`retryable` is always false: no error promises that replaying a write is safe.
+Existing `error` codes and `message` fields remain the error interface.
+
+## Deliberate exceptions to the CLI Design Guidelines
+
+These exceptions preserve the local agent workflow while applying
+[Vercel's CLI Design Guidelines](https://vercel.com/design/cli):
+
+| Guide rule | Reason for the exception | User impact |
+|---|---|---|
+| Ordinary narrow writes run directly; preview is a separate dry-run mode | Notes contain personal knowledge, so every write keeps its existing dry-run default | Inspect the plan, then explicitly pass `--apply` to make a change; no prompt is required |
+| Human output is the default, `--json` selects machine output, and `--version` prints only the version | Agents already consume JSON without a format switch, including `version` | No `--json` option; results and both version forms stay JSON. Help is text, and `read --format markdown` remains Markdown |
+| Use noun groups and separate verbs; never fuse them in names such as `create-store` | Renaming existing commands requires a separate compatibility decision | Keep `add-todo`, `set-style`, `create-folder` and all other command names |
+| Machine documents use the guide's result shapes and error `reason` key | Existing consumers depend on inknotes' keys, error codes and sorted error lines | Preserve the current JSON schema and `error` key; add `status`, `retryable`, and search coverage fields only |
 
 ## Examples
 
@@ -106,7 +144,7 @@ inknotes draw "$NOTE" --svg architecture.svg --width 360 --ink marker --color '#
 
 | Command | Output |
 |---|---|
-| `find [text] [--folder F] [--account A] [--tag T] [--pinned 1] [--limit N]` | Notes whose title contains `text`, newest first (default limit 20) |
+| `find [text] [--folder F] [--account A] [--tag T] [--pinned [1]] [--limit N]` | Notes whose title contains `text`, newest first (default limit 20) |
 | `read <note> [--format json\|markdown]` | Paragraphs with style, indent, quote level, to-do state, inline formatting, tags, links, tables and attachments |
 | `backlinks <note>` | Notes that link to this note or to one of its paragraphs: where each link sits, and which paragraph it targets |
 | `folders [--account A]` | Every folder and subfolder, with id, path, parent and note count |
@@ -177,6 +215,7 @@ Blank lines become one empty paragraph.
 }
 ```
 
+- `search` returns `notes` and `count`, plus `truncated` (another readable matching note exists beyond `--limit`) and `skipped` (selected notes whose body could not be read). It scans all selected bodies to report these accurately; `count: 0` with `skipped > 0` is incomplete coverage, not proof of no matches. `find` retains its `total` field.
 - Attachment `type`: `tag`, `link`, `table`, `url` (link card), `file`, `drawing`, `dividerline`, or another inline type. Each also has `id` and `uti`.
 - `paragraph_id` is the paragraph's identity, which paragraph links point to.
 - Write results: `{"dry_run": true, "plan": …}`; `{"changed": true, "plan": …, "note": …}`; `{"changed": false, "reason": …}` when nothing needed changing.
@@ -243,7 +282,9 @@ These rendering checks were done by hand in Notes.app. Regressions in what `inkn
 
 | Path | Module | Interface |
 |---|---|---|
-| `Sources/inknotes/main.swift` | CLI | Commands, arguments, help |
+| `Sources/inknotes/main.swift` | CLI | Command implementations and dispatch |
+| `Sources/inknotes/CLI.swift` | CLI metadata | Shared option definitions, argument validation and help without store access |
+| `Sources/inknotes/Search.swift` | Search | Matching, snippets, truncation and skipped-body reporting |
 | `Sources/inknotes/NotesShared.swift` | The private API | Every NotesShared method inknotes calls, declared as an `@objc protocol` with its exact selector. Objects are viewed through these protocols, so each message send is type-checked |
 | `Sources/inknotes/Store.swift` | The Notes store | Open (read-only or writable), look up notes, folders and accounts, write guards, `commit` (one edit, saved the way Notes saves it). The seam to Notes: your store, or a test container |
 | `Sources/inknotes/Document.swift` | A note's text | Paragraph JSON, finding a paragraph, inserting paragraphs, paragraph styles |
@@ -251,7 +292,7 @@ These rendering checks were done by hand in Notes.app. Regressions in what `inkn
 | `Sources/inknotes/Markdown.swift` | Markdown | Parse, plan (dry run), render into a note, export |
 | `Sources/inknotes/SVG.swift` | SVG | SVG file → PencilKit drawing |
 | `Sources/inknotes/Core.swift` | Shared | Attribute keys, style and highlight names, JSON output and errors |
-| `tests/` | e2e tests | Every command through the CLI |
+| `tests/` | Tests | CLI contracts without store access, plus every command through the container |
 | `scripts/backup-notestore.sh` | | Backs up the real store before any manual test against it |
 | `docs/findings.md` | | How the private API was found, and the first spike |
 
@@ -264,9 +305,9 @@ uv run pytest
 - The suite builds `build/inknotes` and runs every command through its JSON interface: all writes, their dry runs, and their error codes. Set `INKNOTES_BIN` to test another binary.
 - It runs against a fresh store in the test container `inknotes-e2e`, which it deletes before and after the run (`INKNOTES_E2E_KEEP=1` keeps it).
 - It refuses to start if that store isn't empty. At the end, it checks that your real store has the same objects and note bodies as before.
-- It needs Full Disk Access (Claude's Terminal panel has it); without it, it stops with a message.
-- Every change should keep `uv run pytest` green. A new command or option needs a test in `tests/e2e_test.py`.
-- The tests only talk to the CLI, so they don't depend on the implementation language. Version 0.3.0 rewrote inknotes from Objective-C into Swift; the same 23 tests passed unchanged before and after.
+- Store tests need Full Disk Access; without it, the full run stops with a message. Run `uv run pytest tests/cli_test.py` for help, parsing, error and search coverage tests that need no store access.
+- Every change should keep `uv run pytest` green. A new command or option needs a test in `tests/e2e_test.py` or `tests/cli_test.py`.
+- The e2e tests only talk to the CLI, so they don't depend on the implementation language. Version 0.3.0 rewrote inknotes from Objective-C into Swift; the same 23 tests passed unchanged before and after. The store-free tests also compile a small Swift harness to cover parser values, error classification and unreadable search bodies.
 
 ### Calling a private method
 
