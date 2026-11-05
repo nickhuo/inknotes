@@ -7,35 +7,7 @@ let version = "0.4.0"
 
 // MARK: - Arguments
 
-struct Args {
-    var command: String?
-    var positional: [String] = []
-    var options: [String: String] = [:]
-    var apply = false
-
-    static let flags: Set<String> = ["undo", "bold", "italic", "underline", "strike", "plain"]
-
-    init(_ argv: [String]) {
-        var i = 0
-        while i < argv.count {
-            let s = argv[i]
-            if s == "--apply" { apply = true }
-            else if s.hasPrefix("--"), Args.flags.contains(String(s.dropFirst(2))) { options[String(s.dropFirst(2))] = "1" }
-            else if s.hasPrefix("--"), i + 1 < argv.count { options[String(s.dropFirst(2))] = argv[i + 1]; i += 1 }
-            else if s.hasPrefix("--") { fail("usage", "\(s) needs a value.") }
-            else if command == nil { command = s }
-            else { positional.append(s) }
-            i += 1
-        }
-    }
-
-    func need(_ i: Int, _ what: String) -> String {
-        if positional.count <= i { fail("usage", "Missing \(what). Run `inknotes help`.") }
-        return positional[i]
-    }
-
-    func positional(_ i: Int) -> String? { positional.count > i ? positional[i] : nil }
-
+extension Args {
     /// The paragraph --after or --index names, or -1 for the end of the note.
     func afterParagraph(_ note: AnyObject) -> Int {
         if options["after"] == nil && options["index"] == nil { return -1 }
@@ -73,7 +45,7 @@ func cmdFind(_ a: Args) {
     }
     if a.options["pinned"] != nil { notes = notes.filter(isPinned) }
     notes.sort { (kv($0, "modificationDate") as? Date ?? .distantPast) > (kv($1, "modificationDate") as? Date ?? .distantPast) }
-    let limit = a.options["limit"].flatMap { Int($0) } ?? 20
+    let limit = a.options["limit"].map { Int($0)! } ?? 20
     let out = notes.prefix(max(limit, 0)).map(noteSummary)
     emit(["notes": out, "count": out.count, "total": notes.count])
 }
@@ -138,34 +110,9 @@ func cmdSearch(_ a: Args) {
             return folderPath(folder).caseInsensitiveCompare(f) == .orderedSame || kv(folder, "identifier") as? String == f
         }
     }
-    let limit = a.options["limit"].flatMap { Int($0) } ?? 20
-    var results: [[String: Any]] = []
-    for note in notes {
-        guard let bodyAttr = bodyTextSafe(note) else { continue }
-        let body = bodyAttr.string
-        guard let range = body.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) else { continue }
-        var entry = noteSummary(note)
-        entry["snippet"] = searchSnippet(body, around: range)
-        results.append(entry)
-        if results.count >= limit { break }
-    }
-    emit(["notes": results, "count": results.count])
-}
-
-func searchSnippet(_ body: String, around range: Range<String.Index>) -> String {
-    let pad = 80
-    let lo = body.distance(from: body.startIndex, to: range.lowerBound)
-    let hi = body.distance(from: body.startIndex, to: range.upperBound)
-    let startOff = max(0, lo - pad)
-    let endOff = min(body.count, hi + pad)
-    let start = body.index(body.startIndex, offsetBy: startOff)
-    let end = body.index(body.startIndex, offsetBy: endOff)
-    var snippet = String(body[start..<end])
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-        .replacingOccurrences(of: "\n", with: " ")
-    if startOff > 0 { snippet = "…" + snippet }
-    if endOff < body.count { snippet += "…" }
-    return snippet
+    let limit = a.options["limit"].map { Int($0)! } ?? 20
+    emit(searchResults(notes, query: query, limit: limit,
+                       body: { bodyTextSafe($0)?.string }, summary: noteSummary))
 }
 
 func cmdTags(_ a: Args) {
@@ -229,7 +176,7 @@ func cmdSetStyle(_ a: Args) {
         if style == Style.checklist { if s.todo() == nil { s.setTodo(newTodo(done: false)) } }
         else { s.setTodo(nil) }
         if style < Style.bullet { s.setIndent(0) }
-        if let indent = a.options["indent"] { s.setIndent(Int(indent) ?? 0) }
+        if let indent = a.options["indent"] { s.setIndent(Int(indent)!) }
         setParagraphStyle(note, text, range.enclosing, object)
     }
 }
@@ -365,7 +312,7 @@ func cmdDraw(_ a: Args) {
     guard let svg = a.options["svg"] else { fail("usage", "Pass --svg <file>.") }
     let options = ["width": a.options["width"] ?? "400", "ink": a.options["ink"] ?? "pen", "color": a.options["color"] ?? ""]
     let stats: [String: Any]
-    switch drawingFromSVG(path: (svg as NSString).expandingTildeInPath, width: Double(options["width"]!) ?? 0, color: options["color"], ink: options["ink"]!) {
+    switch drawingFromSVG(path: (svg as NSString).expandingTildeInPath, width: Double(options["width"]!)!, color: options["color"], ink: options["ink"]!) {
     case .success(let (_, s)): stats = s
     case .failure(let error): fail("bad_svg", error.message)
     }
@@ -453,46 +400,6 @@ func cmdAppend(_ a: Args) {
 
 // MARK: - Main
 
-let help = """
-inknotes: read and edit Apple Notes natively.
-Every command prints JSON. Write commands are dry runs unless --apply is given.
-Writes only touch notes in INKNOTES_WRITABLE_ACCOUNTS (comma-separated, default "On My Mac").
-<note> is a note id (UUID), an x-coredata:// URI, or a numeric primary key. <item> is a paragraph's text.
-Placement: --after <item> or --index N puts new content after that paragraph; otherwise at the end.
-
-Read
-  find [text] [--folder PATH|ID] [--account A] [--tag T] [--pinned 1] [--limit N]
-  search <query> [--folder PATH|ID] [--account A] [--limit N]   full-text search over note bodies
-  read <note> [--format json|markdown]
-  backlinks <note>                       notes that link to this note or its paragraphs
-  folders [--account A]                  folders and subfolders with paths and note counts
-  tags [--account A]                     tags with the number of notes using each
-
-Write
-  create [title] [--folder PATH|ID] [--account A] [--markdown FILE|-]   new note from Markdown
-  append <note> --markdown FILE|-        add Markdown content
-  create-folder <name> [--parent PATH|ID] [--account A]
-  pin <note> [--undo]
-  set-style <note> <item> <title|heading|subheading|body|monospaced|bullet|dash|numbered|checklist> [--index N] [--indent N]
-  format <note> <item> [--index N] [--text SUBSTRING] [--bold] [--italic] [--underline] [--strike]
-         [--highlight purple|pink|orange|mint|blue|none] [--link URL] [--plain]
-  check <note> <item> [--index N] [--undo]
-  add-todo <note> <text>
-  add-tag <note> <tag>
-  link <note> <target note> [--paragraph <target item> | --paragraph-index N]
-  add-table <note> --tsv FILE|-
-  add-url <note> <url>                   a link card
-  attach <note> <file>                   an image, PDF or other file
-  draw <note> --svg FILE [--width PT] [--ink pen|pencil|marker] [--color #rrggbb]   a native, editable drawing
-
-Markdown: # ## ### headings, paragraphs, - lists, 1. lists, - [ ] / - [x] to-dos, > quotes, ``` code,
-**bold** *italic* ~~strike~~ ==highlight== =={pink}highlight== [text](url), #tags, [[Note title]] and [[Note title#Paragraph]] links,
-| tables |, --- dividers, ![](file) attachments, ![](drawing.svg) drawings, and a URL alone on a line as a link card.
-
-Needs Full Disk Access for the process that runs it. Built against macOS 27.2.
-
-"""
-
 let reads: [String: (Args) -> Void] = ["find": cmdFind, "search": cmdSearch, "read": cmdRead, "backlinks": cmdBacklinks, "folders": cmdFolders, "tags": cmdTags]
 let writes: [String: (Args) -> Void] = [
     "check": cmdCheck, "set-style": cmdSetStyle, "format": cmdFormat, "add-todo": cmdAddTodo, "add-tag": cmdAddTag,
@@ -501,14 +408,20 @@ let writes: [String: (Args) -> Void] = [
 ]
 
 let args = Args(Array(CommandLine.arguments.dropFirst()))
-switch args.command {
-case nil, "help", "--help":
+if args.helpRequested {
+    let help = args.command.map { CommandSpec.named($0).help } ?? CommandSpec.rootHelp
     FileHandle.standardOutput.write(Data(help.utf8))
-case "version":
-    emit(["version": version])
-case let command?:
-    guard let run = reads[command] ?? writes[command] else { fail("usage", "Unknown command \"\(command)\". Run `inknotes help`.") }
-    // Reads and dry runs open the store read-only.
-    Store.open(writable: writes[command] != nil && args.apply)
-    Store.moc.performAndWait { run(args) }
+} else {
+    switch args.command {
+    case nil, "help":
+        let help = args.positional(0).map { CommandSpec.named($0).help } ?? CommandSpec.rootHelp
+        FileHandle.standardOutput.write(Data(help.utf8))
+    case "version":
+        emit(["version": version])
+    case let command?:
+        guard let run = reads[command] ?? writes[command] else { fail("usage", "Unknown command \"\(command)\". Run `inknotes help`.") }
+        // Arguments have been validated. Reads and dry runs open read-only.
+        Store.open(writable: writes[command] != nil && args.apply)
+        Store.moc.performAndWait { run(args) }
+    }
 }

@@ -14,16 +14,20 @@ Apple Notes is the user's personal knowledge base: AI context, knowledge managem
   mkdir -p ~/.local/bin && gh release download --repo nickhuo/inknotes --pattern inknotes --output ~/.local/bin/inknotes --clobber && chmod +x ~/.local/bin/inknotes
   ```
   Run the same command to update.
-- **Full Disk Access.** inknotes needs it. In Claude's desktop app only the Terminal panel has it: run inknotes through the Terminal panel (`run_in_terminal`), not the Bash tool. Without it every command fails with `no_access`.
-- **Output.** Every command prints JSON on stdout; errors print `{"error": code, "message": …}` on stderr with exit code 1. `read --format markdown` prints Markdown.
+- **Full Disk Access.** inknotes needs it. In Claude's desktop app only the Terminal panel has it: run inknotes through the Terminal panel (`run_in_terminal`), not the Bash tool. Store commands may fail with `no_access`; help, version and argument validation need no store access.
+- **Output.** Results and `version`/`--version` print JSON on stdout; help is text and `read --format markdown` prints Markdown. Errors print one sorted JSON line `{"error": code, "message": …, "retryable": false, "status": "action_required"|"error"}` on stderr. Exit 0 means success, 2 means usage or missing input (including lookup failures), and 1 means an operational failure. Access restrictions use `action_required` with exit 1; other operational failures use `error`. Do not automatically retry writes.
 - **Dry run first.** Write commands only plan unless you pass `--apply`. Run once without it, check the `plan`, then run again with `--apply` and check the returned `note`.
 - **Accounts.** Writes are limited to the accounts in `INKNOTES_WRITABLE_ACCOUNTS` (default `On My Mac`). The knowledge base is in **iCloud**, so prefix writes to it with `INKNOTES_WRITABLE_ACCOUNTS=iCloud`. Reads need nothing.
 - **Sync.** Changes appear in Notes.app on this Mac at once. Notes.app uploads them to iCloud, usually within 15–90 seconds; don't promise the user their phone has a change the moment you make it.
 
+## Help and arguments
+
+Use `inknotes --help` or `-h` for root help, and `inknotes <command> --help` or `inknotes help <command>` for usage, options and an example. These never open Notes. Unknown options and extra positional arguments fail before opening the store. Value options accept `--name=value` or `--name value`; repeated options use the last value. `--` ends option parsing for literal text starting with `-`. `--limit` is a positive integer; `--indent` and paragraph indexes are non-negative integers; `--width` is finite and positive; `--format` is `json` or `markdown`. Invalid values exit 2.
+
 ## Finding and reading
 
 ```bash
-inknotes find "words in the title" [--folder "A/B"] [--account iCloud] [--tag topic] [--pinned 1] [--limit N]
+inknotes find "words in the title" [--folder "A/B"] [--account iCloud] [--tag topic] [--pinned [1]] [--limit N]
 inknotes search "words in the body" [--folder "A/B"] [--account iCloud] [--limit N]
 inknotes read <id>                    # JSON: paragraphs with style, to-do state, tags, links, tables, formatting
 inknotes read <id> --format markdown  # the note as Markdown
@@ -32,7 +36,7 @@ inknotes folders [--account iCloud]   # folder paths, ids, note counts
 inknotes tags [--account iCloud]      # tags and how many notes use each
 ```
 
-`find` matches titles only. `search` does full-text grep over note bodies and returns a `snippet` of matching context alongside each result. `<id>` is the `id` from `find` or `search` (a UUID). To open a note directly in Notes.app, use the deeplink `notes://showNote?identifier=<id>`. A paragraph is named by its exact displayed `text` from `read`; when several paragraphs read the same, pass `--index N` instead of the text. With `--index`, `set-style` takes the style as `--style heading`, since there is no text argument before it.
+`find` matches titles only. `search` does full-text grep over note bodies and returns a `snippet` of matching context alongside each result. It also reports `truncated` when readable matches were omitted by the limit, and `skipped` for selected notes whose bodies could not be read. A zero count with skipped bodies is incomplete coverage. Bare `--pinned` and legacy `--pinned 1` both work. `<id>` is the `id` from `find` or `search` (a UUID). To open a note directly in Notes.app, use the deeplink `notes://showNote?identifier=<id>`. A paragraph is named by its exact displayed `text` from `read`; when several paragraphs read the same, pass `--index N` instead of the text. With `--index`, `set-style` takes the style as `--style heading`, since there is no text argument before it.
 
 ## Writing
 
