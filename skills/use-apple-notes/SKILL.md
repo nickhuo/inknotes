@@ -5,7 +5,7 @@ description: Manage the user's Apple Notes knowledge base (AI context, knowledge
 
 # Apple Notes knowledge base
 
-Apple Notes is the user's personal knowledge base: AI context, knowledge management, and task management. Operate it with `inknotes` (`~/.local/bin/inknotes`; source and full reference in `~/GitHub/inknotes/README.md`). It reads and writes Notes through Notes' own framework, so checklists, `#tags`, links, tables and formatting are real Notes objects, not imitations.
+Apple Notes is the user's personal knowledge base: AI context, knowledge management, and task management. Operate it with `inknotes` (`~/.local/bin/inknotes`; source in `~/GitHub/inknotes`, full reference in `~/GitHub/inknotes/docs/reference.md`). It reads and writes Notes through Notes' own framework, so checklists, `#tags`, links, tables and formatting are real Notes objects, not imitations.
 
 ## Before you start
 
