@@ -2,7 +2,7 @@
 
 A command-line tool for agents to read and edit Apple Notes **natively**. It works through Notes' own private framework (NotesShared), so it can do what AppleScript can't: real checklists, `#tags`, links between notes and to single paragraphs, tables, headings, highlights, pinning, subfolders, link cards, file attachments, and editable PencilKit drawings made from SVG. It can also build a whole note from Markdown, such as a research report.
 
-- Results, including `version` and `--version`, print JSON to stdout; `read --format markdown` prints Markdown and help prints text. Errors print one sorted JSON line `{"error": code, "message": …, "retryable": false, "status": "action_required"|"error"}` to stderr. Exit codes: **0** success, **2** usage errors or missing input, **1** operational failures.
+- Results, including `version` and `--version`, print JSON to stdout; `read --format markdown` prints Markdown and help prints text. Errors print one sorted JSON line `{"error": code, "message": …, "retryable": false, "status": "action_required"|"error"}` to stderr. Exit codes: **0** success, **2** usage errors or missing input, **1** operational failures, including a note, folder or paragraph that isn't found.
 - Write commands are **dry runs** unless `--apply` is passed. A dry run validates everything (paragraphs, link targets, files, SVGs), prints the plan, and opens the database read-only.
 - Writes only touch accounts listed in `INKNOTES_WRITABLE_ACCOUNTS` (comma-separated). The default is `On My Mac`; set it to `iCloud` (or `On My Mac,iCloud`) to write to iCloud. In tests, Notes.app uploaded new notes and edits made this way within 15–90 seconds, though one edit once waited several minutes.
 - Renamed from `nnote` in 0.4.0: the binary is `inknotes` and the environment variables start with `INKNOTES_`.
@@ -26,7 +26,8 @@ Each command rejects unknown options and extra positional arguments before openi
 Notes. Value options accept `--name value` and `--name=value`; repeated options
 use the last value. `--` ends option parsing, so `inknotes find -- --help` searches
 for the literal title text `--help`. Text that starts with `-` needs it too:
-`inknotes add-todo <note> -- '- item'`. Switches such as `--apply` take no value.
+`inknotes add-todo <note> -- '- item'`. An option value that starts with `--` needs
+the `=` form: `--after=--item`. Switches such as `--apply` take no value.
 `find --pinned`, `--pinned 1` and `--pinned=1` select pinned notes.
 
 `--limit` must be a positive integer (default 20); `--indent`, `--index` and
@@ -34,12 +35,17 @@ for the literal title text `--help`. Text that starts with `-` needs it too:
 greater than zero (default 400 points). `--format` accepts only `json` or `markdown`.
 Invalid values fail with exit 2 instead of silently choosing a default.
 
-Input and lookup errors (including missing files and resources) exit 2 with
-`status: "action_required"`. Access restrictions (`no_access`, `account_not_writable`,
-`note_locked`, `note_deleted`) exit 1 with `status: "action_required"`.
+Input errors, including unreadable input files and ambiguous references
+(`file_not_found`, `ambiguous_*`), exit 2 with `status: "action_required"`.
+Arguments are checked before the store opens, so a bad argument is reported ahead of a
+missing note. Things the store rules out exit 1 with `status: "action_required"`:
+access restrictions (`no_access`, `account_not_writable`, `note_locked`, `note_deleted`),
+not found (`note_not_found`, `folder_not_found`, `account_not_found`,
+`paragraph_not_found`, `text_not_found`) and conflicts (`folder_exists`, `not_a_todo`).
 Framework, fetch, save and object-creation failures exit 1 with `status: "error"`.
 `retryable` is always false: no error promises that replaying a write is safe.
-Existing `error` codes and `message` fields remain the error interface.
+Existing `error` codes and the `error` and `message` keys are stable; match on the
+code, because `message` wording can change.
 
 ## Deliberate exceptions to the CLI Design Guidelines
 

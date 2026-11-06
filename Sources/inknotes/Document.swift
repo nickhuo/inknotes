@@ -150,15 +150,15 @@ func noteJSON(_ note: AnyObject) -> [String: Any] {
     return d
 }
 
-/// The paragraph at --index, or the one whose text equals `text`. Fails with
-/// paragraph_not_found, ambiguous_paragraph (listing the indexes) or bad_index.
-func findParagraph(_ paragraphs: [[String: Any]], text: String?, index: String?) -> Int {
+/// The paragraph at --index, or the one whose text equals `text`; callers pass one
+/// of them. Fails with paragraph_not_found, ambiguous_paragraph (listing the
+/// indexes) or bad_index.
+func findParagraph(_ paragraphs: [[String: Any]], text: String?, index: Int?) -> Int {
     if let index {
-        let i = Int(index) ?? 0
-        if i < 0 || i >= paragraphs.count { fail("bad_index", "Paragraph index out of range.") }
-        return i
+        if index >= paragraphs.count { fail("bad_index", "Paragraph index out of range.") }
+        return index
     }
-    guard let text else { fail("usage", "Name the paragraph by its text, or pass --index N.") }
+    let text = text!
     let hits = paragraphs.filter { $0["text"] as? String == text }.map { $0["index"] as! Int }
     if hits.isEmpty { fail("paragraph_not_found", "No paragraph with text \"\(text)\".") }
     if hits.count > 1 {

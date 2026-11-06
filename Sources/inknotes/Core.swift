@@ -67,12 +67,13 @@ enum FailureKind {
         switch code {
         case "usage", "bad_index", "bad_style", "bad_highlight", "bad_url",
              "bad_text", "bad_tag", "bad_target", "bad_table", "bad_svg",
-             "bad_name", "bad_parent", "bad_folder", "not_a_todo", "folder_exists",
-             "note_not_found", "folder_not_found", "account_not_found",
-             "paragraph_not_found", "text_not_found", "file_not_found",
+             "bad_name", "bad_parent", "bad_folder", "file_not_found",
              "ambiguous_note", "ambiguous_folder", "ambiguous_paragraph":
             return .input
-        case "no_access", "account_not_writable", "note_locked", "note_deleted":
+        case "no_access", "account_not_writable", "note_locked", "note_deleted",
+             // Not found and conflict: the input was well formed, but the store disagrees.
+             "note_not_found", "folder_not_found", "account_not_found",
+             "paragraph_not_found", "text_not_found", "folder_exists", "not_a_todo":
             return .actionRequired
         default:
             return .operational

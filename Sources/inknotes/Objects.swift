@@ -122,11 +122,10 @@ func makeURLCard(_ note: AnyObject, _ urlString: String) -> NSAttributedString {
     return objectFor(attachment, "link card")
 }
 
-/// opts: width (points, default 400), ink (pen, pencil, marker), color (#rrggbb).
-func makeDrawing(_ note: AnyObject, svg path: String, options: [String: String]) -> NSAttributedString {
+/// width in points, ink (pen, pencil, marker), color (#rrggbb).
+func makeDrawing(_ note: AnyObject, svg path: String, width: Double = 400, color: String? = nil, ink: String = "pen") -> NSAttributedString {
     requireClassMethod("ICPaperAttachmentCreationHelper", "createSystemPaperAttachmentWithPKDrawing:inNote:", "Cannot create drawings on this macOS.")
-    let result = drawingFromSVG(path: resolvePath(path), width: Double(options["width"] ?? "") ?? 400,
-                                color: options["color"], ink: options["ink"] ?? "pen")
+    let result = drawingFromSVG(path: resolvePath(path), width: width, color: color, ink: ink)
     guard case .success(let (drawing, _)) = result else {
         if case .failure(let error) = result { fail("bad_svg", error.message) }
         fail("bad_svg", "The SVG could not be converted.")

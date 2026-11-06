@@ -352,7 +352,7 @@ func renderBlocks(_ blocks: [Block], note: AnyObject, account: AnyObject) -> NSA
             case .table: content = makeTable(note, b.rows)
             case .file: content = makeFile(note, b.value)
             case .url: content = makeURLCard(note, b.value)
-            case .drawing: content = makeDrawing(note, svg: b.value, options: [:])
+            case .drawing: content = makeDrawing(note, svg: b.value)
             default: content = makeDivider(note)
             }
         }

@@ -1,6 +1,7 @@
 """CLI contracts that must work without Full Disk Access or a Notes store."""
 import json
 import os
+import re
 import subprocess
 
 import pytest
@@ -13,6 +14,10 @@ COMMANDS = {
     "create": 1, "append": 1, "create-folder": 1, "pin": 1, "set-style": 3,
     "format": 2, "check": 2, "add-todo": 2, "add-tag": 2, "link": 2,
     "add-table": 1, "add-url": 2, "attach": 2, "draw": 1, "help": 1, "version": 0,
+}
+WRITES = {
+    "create", "append", "create-folder", "pin", "set-style", "format", "check",
+    "add-todo", "add-tag", "link", "add-table", "add-url", "attach", "draw",
 }
 
 
@@ -148,6 +153,62 @@ def test_help_mentions_double_dash_where_text_is_accepted(cli, command, max_args
     assert ("put -- before it" in page) == (max_args > 0 and command != "help")
 
 
+@pytest.mark.parametrize("args,missing", [
+    (["read"], "note"), (["search"], "search query"), (["add-todo", "n"], "todo text"),
+    (["add-tag", "n"], "tag"), (["link", "n"], "target note"), (["attach", "n"], "file"),
+    (["add-url", "n"], "URL"), (["create-folder"], "folder name"),
+])
+def test_missing_argument_is_named(cli, args, missing):
+    assert error(cli(*args))["message"].startswith(f"Missing {missing}. ")
+
+
+@pytest.mark.parametrize("args", [
+    ["add-todo", "n", "x", "--after", "--prev"],
+    ["set-style", "n", "--index", "0", "--style", "body", "--indent", "--prev"],
+])
+def test_option_value_that_looks_like_an_option_names_the_equals_form(cli, args):
+    option, value = args[-2:]
+    assert f"write {option}={value}" in error(cli(*args))["message"]
+
+
+def test_option_value_with_leading_dashes_parses_with_equals(harness):
+    doc = json.loads(harness("parse", "add-todo", "n", "x", "--after=--prev").stdout)
+    assert doc["options"] == {"after": "--prev"}
+
+
+@pytest.mark.parametrize("args,code,text", [
+    (["set-style", "n", "x", "bogus"], "bad_style", "Style must be one of"),
+    (["set-style", "n", "x"], "bad_style", "Style must be one of"),
+    (["format", "n", "x"], "usage", "Pass at least one of"),
+    (["format", "n"], "usage", "Name the paragraph"),
+    (["check", "n"], "usage", "Name the paragraph"),
+    (["format", "n", "x", "--highlight", "red"], "bad_highlight", "--highlight takes"),
+    (["format", "n", "x", "--link", "nope"], "bad_url", "--link needs a full URL"),
+    (["check", "n", "--index", "abc"], "bad_index", "--index needs an integer"),
+    (["link", "n", "t", "--paragraph-index", "abc"], "bad_index", "--paragraph-index needs an integer"),
+    (["append", "n"], "usage", "--markdown"), (["add-table", "n"], "usage", "--tsv"), (["draw", "n"], "usage", "--svg"),
+])
+def test_argument_errors_keep_their_codes(cli, args, code, text):
+    assert text in error(cli(*args), code=code)["message"]
+
+
+def test_required_options_appear_in_usage(cli):
+    assert "Usage: inknotes append <note> --markdown FILE|- [options]" in cli("append", "--help").stdout
+    assert "Usage: inknotes draw <note> --svg FILE [options]" in cli("draw", "--help").stdout
+    assert "Usage: inknotes set-style <note> [item] [style] [options]" in cli("set-style", "--help").stdout
+
+
+def test_every_command_has_a_handler():
+    source = (ROOT / "Sources/inknotes/main.swift").read_text()
+    table = source[source.index("let handlers"):source.index("let args = Args")]
+    assert set(re.findall(r'"([a-z-]+)": cmd', table)) == set(COMMANDS) - {"help", "version"}
+
+
+@pytest.mark.parametrize("command", COMMANDS)
+def test_apply_is_accepted_only_by_write_commands(cli, command):
+    assert ("--apply" in cli(command, "--help").stdout) == (command in WRITES)
+
+
 @pytest.fixture(scope="session")
 def harness(tmp_path_factory):
     """Exercise parser values, errors and unreadable search bodies without Notes."""
@@ -159,7 +220,7 @@ let args = Array(CommandLine.arguments.dropFirst())
 switch args[0] {
 case "parse":
     let parsed = Args(Array(args.dropFirst()))
-    emit(["command": parsed.command ?? "", "positional": parsed.positional, "options": parsed.options, "apply": parsed.apply])
+    emit(["command": parsed.command ?? "", "positional": parsed.positional, "options": parsed.options, "ints": parsed.ints, "apply": parsed.apply])
 case "fail": fail(args[1], "Fixture failure.")
 case "search":
     let bodies: [String?] = ["Café needle", nil, "unmatched", "another NEEDLE", nil]
@@ -179,7 +240,7 @@ default: fatalError("unknown fixture")
 def test_parser_values_and_safety_default(harness):
     p = harness("parse", "find", "--limit=5", "--pinned", "--", "--help")
     assert p.returncode == 0 and p.stderr == ""
-    assert json.loads(p.stdout) == {"command": "find", "positional": ["--help"], "options": {"limit": "5", "pinned": "1"}, "apply": False}
+    assert json.loads(p.stdout) == {"command": "find", "positional": ["--help"], "options": {"limit": "5", "pinned": "1"}, "ints": {"limit": 5}, "apply": False}
     for pinned in [["--pinned"], ["--pinned", "1"], ["--pinned=1"]]:
         assert json.loads(harness("parse", "find", *pinned).stdout)["options"] == {"pinned": "1"}
     p = harness("parse", "add-todo", "note", "--apply", "--", "--literal-text")
@@ -189,13 +250,20 @@ def test_parser_values_and_safety_default(harness):
     assert json.loads(p.stdout)["positional"] == ["note", "- leading dash"]
     p = harness("parse", "draw", "note", "--svg=test.svg", "--width=12.5")
     assert json.loads(p.stdout)["options"]["width"] == "12.5"
+    p = harness("parse", "set-style", "note", "item", "HEADING")
+    assert json.loads(p.stdout)["ints"] == {"style": 1}
     p = harness("parse", "set-style", "note", "--index=0", "--style=body", "--indent=0")
     assert p.returncode == 0 and json.loads(p.stdout)["apply"] is False
 
 
 @pytest.mark.parametrize("code,exit_code,status", [
     ("usage", 2, "action_required"), ("file_not_found", 2, "action_required"),
-    ("note_not_found", 2, "action_required"), ("bad_index", 2, "action_required"),
+    ("bad_index", 2, "action_required"), ("ambiguous_note", 2, "action_required"),
+    ("ambiguous_folder", 2, "action_required"), ("ambiguous_paragraph", 2, "action_required"),
+    ("note_not_found", 1, "action_required"), ("folder_not_found", 1, "action_required"),
+    ("account_not_found", 1, "action_required"), ("paragraph_not_found", 1, "action_required"),
+    ("text_not_found", 1, "action_required"), ("folder_exists", 1, "action_required"),
+    ("not_a_todo", 1, "action_required"),
     ("no_access", 1, "action_required"), ("account_not_writable", 1, "action_required"),
     ("framework_unavailable", 1, "error"), ("save_failed", 1, "error"),
     ("fetch_failed", 1, "error"),
