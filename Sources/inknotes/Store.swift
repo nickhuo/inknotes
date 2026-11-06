@@ -20,7 +20,8 @@ enum Store {
     static private(set) var moc: NSManagedObjectContext!
 
     /// Opens the store. Read-only opens every persistent store with Notes'
-    /// read-only option and fails if any store is writable anyway.
+    /// read-only option and fails if any store is writable anyway. A context
+    /// can exist after loading failed; require a loaded persistent store too.
     static func open(writable: Bool) {
         if let error = NotesShared.load() { fail("framework_unavailable", error) }
         let contextClass: AnyObject = NSClassFromString("ICNoteContext") as AnyObject? ?? { fail("unsupported_macos", "ICNoteContext is missing.") }()
@@ -33,6 +34,11 @@ enum Store {
         contexts.startSharedContext(options: writable ? 0 : readOnlyOption)
         guard let shared = contexts.sharedContext(), let moc = view(shared, as: ICNoteContext.self).managedObjectContext() else {
             fail("no_access", "Could not open the Notes database. Does this process have Full Disk Access?")
+        }
+        moc.performAndWait {
+            guard let coordinator = moc.persistentStoreCoordinator, !coordinator.persistentStores.isEmpty else {
+                fail("no_access", "Could not open the Notes database. Does this process have Full Disk Access?")
+            }
         }
         context = view(shared, as: ICNoteContext.self)
         self.moc = moc
