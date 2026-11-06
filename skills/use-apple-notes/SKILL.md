@@ -5,20 +5,20 @@ description: Manage the user's Apple Notes knowledge base (AI context, knowledge
 
 # Apple Notes knowledge base
 
-Apple Notes is the user's personal knowledge base: AI context, knowledge management, and task management. Operate it with `inknotes` (`~/.local/bin/inknotes`; source in `~/GitHub/inknotes`, full reference in `~/GitHub/inknotes/docs/reference.md`). It reads and writes Notes through Notes' own framework, so checklists, `#tags`, links, tables and formatting are real Notes objects, not imitations.
+Apple Notes is the user's personal knowledge base: AI context, knowledge management, and task management. Operate it with `inknotes` (full reference: https://github.com/nickhuo/inknotes/blob/main/docs/reference.md). It reads and writes Notes through Notes' own framework, so checklists, `#tags`, links, tables and formatting are real Notes objects, not imitations.
 
 ## Before you start
 
-- **Install.** If `inknotes` is not on the PATH, download the latest release (private repo; needs `gh` signed in with access):
+- **Install.** If `inknotes` is not on the PATH, check `~/.local/bin/inknotes`. If it isn't there either, download the latest release (no GitHub account or `gh` needed):
   ```bash
-  mkdir -p ~/.local/bin && gh release download --repo nickhuo/inknotes --pattern inknotes --output ~/.local/bin/inknotes --clobber && chmod +x ~/.local/bin/inknotes
+  mkdir -p ~/.local/bin && curl -fsSL https://github.com/nickhuo/inknotes/releases/latest/download/inknotes -o ~/.local/bin/inknotes && chmod +x ~/.local/bin/inknotes
   ```
-  Run the same command to update.
-- **Full Disk Access.** inknotes needs it. In Claude's desktop app only the Terminal panel has it: run inknotes through the Terminal panel (`run_in_terminal`), not the Bash tool. Without it every command fails with `no_access`.
+  Run the same command to update. If `~/.local/bin` is not on the PATH, call it by its full path.
+- **Full Disk Access.** The process that runs inknotes needs it. Without it, commands fail with `no_access`. Version 0.4.0 instead returns empty results with exit 0, so on 0.4.0 (`inknotes version`) don't tell the user they have no notes until you've ruled this out. Ask them to add the app that runs you under System Settings → Privacy & Security → Full Disk Access and restart it, or to run inknotes from a terminal that has access. Your host may run commands in a process without this access even after that.
 - **Output.** Every command prints JSON on stdout; errors print `{"error": code, "message": …}` on stderr with exit code 1. `read --format markdown` prints Markdown.
 - **Dry run first.** Write commands only plan unless you pass `--apply`. Run once without it, check the `plan`, then run again with `--apply` and check the returned `note`.
-- **Accounts.** Writes are limited to the accounts in `INKNOTES_WRITABLE_ACCOUNTS` (default `On My Mac`). The knowledge base is in **iCloud**, so prefix writes to it with `INKNOTES_WRITABLE_ACCOUNTS=iCloud`. Reads need nothing.
-- **Sync.** Changes appear in Notes.app on this Mac at once. Notes.app uploads them to iCloud, usually within 15–90 seconds; don't promise the user their phone has a change the moment you make it.
+- **Accounts.** Writes are limited to the accounts in `INKNOTES_WRITABLE_ACCOUNTS` (default `On My Mac`). iCloud is supported and opt-in: write to it only when the user asks you to or has already set the variable, and if a write fails with `account_not_writable`, ask before adding iCloud. Reads need nothing.
+- **Sync.** Changes appear in Notes.app on this Mac at once. Notes.app uploads iCloud changes itself, usually within 15–90 seconds and once after several minutes; don't promise the user their phone has a change the moment you make it.
 
 ## Finding and reading
 
@@ -37,25 +37,30 @@ inknotes tags [--account iCloud]      # tags and how many notes use each
 ## Writing
 
 ```bash
-W="INKNOTES_WRITABLE_ACCOUNTS=iCloud"   # for notes in iCloud
-
-env $W inknotes create "Title" --folder "Folder/Sub" --account iCloud --markdown note.md --apply
-env $W inknotes append <id> --markdown - [--after "<paragraph text>"] --apply   # Markdown on stdin
-env $W inknotes check <id> "<to-do text>" [--undo] --apply
-env $W inknotes add-todo <id> "text" [--after "<paragraph text>"] --apply
-env $W inknotes add-tag <id> topic --apply
-env $W inknotes link <id> <target-id> [--paragraph "<target paragraph text>"] --apply
-env $W inknotes set-style <id> "<paragraph text>" heading --apply
-env $W inknotes format <id> "<paragraph text>" [--text "part"] --bold|--italic|--highlight pink|--link URL --apply
-env $W inknotes pin <id> [--undo] --apply
-env $W inknotes create-folder "Name" --parent "Folder" --account iCloud --apply
-env $W inknotes add-table <id> --tsv - --apply      # rows on lines, cells tab-separated
-env $W inknotes add-url <id> https://… --apply      # link card
-env $W inknotes attach <id> /path/file.pdf --apply
-env $W inknotes draw <id> --svg diagram.svg [--width 400] --apply   # native, editable drawing
+inknotes create "Title" --folder "Folder/Sub" --markdown note.md --apply
+inknotes append <id> --markdown - [--after "<paragraph text>"] --apply   # Markdown on stdin
+inknotes check <id> "<to-do text>" [--undo] --apply
+inknotes add-todo <id> "text" [--after "<paragraph text>"] --apply
+inknotes add-tag <id> topic --apply
+inknotes link <id> <target-id> [--paragraph "<target paragraph text>"] --apply
+inknotes set-style <id> "<paragraph text>" heading --apply
+inknotes format <id> "<paragraph text>" [--text "part"] --bold|--italic|--highlight pink|--link URL --apply
+inknotes pin <id> [--undo] --apply
+inknotes create-folder "Name" --parent "Folder" --apply
+inknotes add-table <id> --tsv - --apply      # rows on lines, cells tab-separated
+inknotes add-url <id> https://… --apply      # link card
+inknotes attach <id> /path/file.pdf --apply
+inknotes draw <id> --svg diagram.svg [--width 400] --apply   # native, editable drawing
 ```
 
 Prefer `create`/`append` with Markdown for anything longer than a line: one save, every object native.
+
+These write to `On My Mac`. When the user asks you to write to iCloud, prefix that command with the variable, and add `--account iCloud` to `create` and `create-folder`:
+
+```bash
+INKNOTES_WRITABLE_ACCOUNTS=iCloud inknotes create "Title" --account iCloud --markdown note.md --apply
+INKNOTES_WRITABLE_ACCOUNTS=iCloud inknotes check <id> "<to-do text>" --apply
+```
 
 ### Markdown it understands
 

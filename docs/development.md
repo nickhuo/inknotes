@@ -66,7 +66,7 @@ uv run pytest
 - The suite builds `build/inknotes` and runs every command through its JSON interface: all writes, their dry runs, and their error codes. Set `INKNOTES_BIN` to test another binary.
 - It runs against a fresh store in the test container `inknotes-e2e`, which it deletes before and after the run (`INKNOTES_E2E_KEEP=1` keeps it).
 - It refuses to start if that store isn't empty. At the end, it checks that your real store has the same objects and note bodies as before.
-- It needs Full Disk Access (Claude's Terminal panel has it); without it, it stops with a message.
+- It needs Full Disk Access ([how to grant it](../README.md#get-started)); without it, it stops with a message.
 - Every change should keep `uv run pytest` green. A new command or option needs a test in `tests/e2e_test.py`.
 - The tests only talk to the CLI, so they don't depend on the implementation language. Version 0.3.0 rewrote inknotes from Objective-C into Swift; the same 23 tests passed unchanged before and after.
 

@@ -6,7 +6,7 @@ Every command, option and output format. For setup, see the [README](../README.m
 
 - Every command prints JSON to stdout. Errors print `{"error": code, "message": …}` to stderr with exit code 1. `read --format markdown` prints Markdown instead.
 - Write commands are **dry runs** unless `--apply` is passed. A dry run validates everything (paragraphs, link targets, files, SVGs), prints the plan, and opens the database read-only.
-- Writes only touch accounts listed in `INKNOTES_WRITABLE_ACCOUNTS` (comma-separated). The default is `On My Mac`; set it to `iCloud` (or `On My Mac,iCloud`) to write to iCloud. In tests, Notes.app uploaded new notes and edits made this way within 15–90 seconds, though one edit once waited several minutes.
+- Writes only touch accounts listed in `INKNOTES_WRITABLE_ACCOUNTS` (comma-separated). The default is `On My Mac`. iCloud is supported and opt-in: set the variable to `iCloud` (or `On My Mac,iCloud`) to write to it. Notes.app does the upload, usually within 15–90 seconds, though one edit once took several minutes.
 - Renamed from `nnote` in 0.4.0: the binary is `inknotes` and the environment variables start with `INKNOTES_`.
 
 ## Examples
@@ -180,9 +180,8 @@ Blank lines become one empty paragraph.
 
 Error codes: `usage`, `no_access`, `note_not_found`, `ambiguous_note`, `folder_not_found`, `ambiguous_folder`, `folder_exists`, `account_not_found`, `account_not_writable`, `paragraph_not_found`, `ambiguous_paragraph`, `bad_index`, `text_not_found`, `not_a_todo`, `bad_text`, `bad_tag`, `bad_target`, `bad_style`, `bad_highlight`, `bad_url`, `bad_table`, `bad_svg`, `bad_name`, `bad_parent`, `bad_folder`, `file_not_found`, `note_deleted`, `note_locked`, `unsupported_macos`, `framework_unavailable`, `store_not_read_only`, `fetch_failed`, `save_failed`, `create_failed`, `folder_failed`, `tag_failed`, `link_failed`, `attachment_failed`.
 
-## Not supported or untested
+## Limits
 
-- **iCloud:** untested. It's blocked by default; add it to `INKNOTES_WRITABLE_ACCOUNTS` only after testing sync.
 - Not supported: deleting or moving notes, paragraphs or attachments; editing table cells; text color; locked notes.
 - **SVG:** strokes only, so fills become outlines; gradients, `<use>` and CSS classes are ignored. Rounded rectangles (`rx`, `ry`) are supported. `<text>` and `<tspan>` are drawn as hollow glyph outlines in their fill color (CoreText, so Chinese falls back to PingFang), with `font-size`, `font-family`, bold, `text-anchor` and `dominant-baseline="middle"`. The dry run reports `text` (elements) and `glyphs` (characters drawn).
 - **Bundle identifier:** PencilKit stores per-app state under the bundle identifier and crashes in a process without one, so the binary embeds `Sources/inknotes/Info.plist` (`dev.inknotes.cli`).
