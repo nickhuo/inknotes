@@ -15,15 +15,25 @@ inknotes edits notes through the same framework Notes.app itself uses. Everythin
 
 ## Get started
 
-You also need Node.js for `npx` in step 3.
+You also need **Node.js 22.20 or later** and `npx` to install the agent skill.
 
-**1. Install the binary.** You don't need a GitHub account or `gh`:
+**1. Install the CLI and agent skill together**:
 
 ```bash
-mkdir -p ~/.local/bin && curl -fsSL https://github.com/nickhuo/inknotes/releases/latest/download/inknotes -o ~/.local/bin/inknotes && chmod +x ~/.local/bin/inknotes
+curl -fsSL https://raw.githubusercontent.com/nickhuo/inknotes/main/install.sh | sh
 ```
 
-Run the same command to update. Use this command rather than a browser download: the binary isn't notarized, so macOS may block a copy downloaded in a browser. If `~/.local/bin` isn't on your `PATH`, add `export PATH="$HOME/.local/bin:$PATH"` to `~/.zshrc` and open a new terminal.
+This installs the latest CLI to `~/.local/bin/inknotes` and runs `npx skills@1.7.6 add` for the matching release's `use-apple-notes` skill. Run it in a terminal: the skills CLI keeps its native agent picker, installation-method choice, and confirmation prompts, with global scope already selected. The installer verifies GitHub's SHA-256 digest and the binary's version, and replaces an existing CLI only after the binary and skill checks pass. Cancelling the skill installation keeps the previous CLI in place.
+
+Run the same command to update both. To preselect an agent, pass its [skills agent name](https://github.com/vercel-labs/skills/blob/main/docs/agents.md); repeat `--agent` to select several:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nickhuo/inknotes/main/install.sh | sh -s -- --agent cursor
+```
+
+Add `--version v0.4.0` to install a specific release and its matching skill. If installation fails, fix the reported issue and rerun; skill installation may already have written files, but the previous CLI stays in place until all checks pass.
+
+The binary isn't notarized, so macOS may block a copy downloaded in a browser. If `~/.local/bin` isn't on your `PATH`, the installer shows the line to add to `~/.zshrc` before opening a new terminal.
 
 **2. Give your terminal Full Disk Access.** inknotes reads the Notes database directly, so the app that starts it needs this permission.
 
@@ -33,15 +43,9 @@ Run the same command to update. Use this command rather than a browser download:
 
 If your agent runs in a desktop app, add that app the same way. Some apps run commands in a process that doesn't get this access. If so, run inknotes from a terminal that has it.
 
-Without this access, commands fail with `no_access`. Version 0.4.0 instead reports empty results, as if you had no notes, and the fix comes in the next release.
+Without this access, commands fail with `no_access`. Version 0.4.0 instead reports empty results, as if you had no notes; update to 0.5.0 or later for the explicit error.
 
-**3. Install the agent skill** (Claude Code, Codex and other agents that read skills):
-
-```bash
-npx skills add nickhuo/inknotes --skill use-apple-notes -g
-```
-
-**4. Ask your agent.** For example:
+**3. Ask your agent.** For example:
 
 > Find my notes tagged #weekly, add a to-do "Plan next sprint" to the newest one, and link it to my Roadmap note.
 
