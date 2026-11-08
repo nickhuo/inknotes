@@ -20,11 +20,11 @@ inknotes edits notes through the same framework Notes.app itself uses. Everythin
 - **Supported platform:** macOS 27.2 on Apple silicon.
 - **It can break.** inknotes writes through NotesShared, a private Apple framework with no compatibility promise, so a macOS update can break it. Each call checks that the method it needs exists and fails with `unsupported_macos` if it doesn't. That check can't catch a method that still exists but behaves differently.
 - **Your accounts share one file.** On My Mac notes and iCloud notes live in the same database file. Limiting writes to On My Mac keeps inknotes from editing your iCloud notes, but a bug that damaged the file would affect both.
-- **Back up first.** Step 3 below shows how.
+- **Back up first.**
 
 ## Get started
 
-You also need Node.js for `npx` in step 4.
+You also need Node.js for `npx` in step 3.
 
 **1. Install the binary.** You don't need a GitHub account or `gh`:
 
@@ -44,19 +44,13 @@ If your agent runs in a desktop app, add that app the same way. Some apps run co
 
 Without this access, commands fail with `no_access`. Version 0.4.0 instead reports empty results, as if you had no notes, and the fix comes in the next release.
 
-**3. Back up your notes.** This downloads the backup script so you can read it, then saves a verified copy of the database to `~/Downloads`. It only reads your notes:
-
-```bash
-curl -fsSLO https://raw.githubusercontent.com/nickhuo/inknotes/main/scripts/backup-notestore.sh && zsh backup-notestore.sh
-```
-
-**4. Install the agent skill** (Claude Code, Codex and other agents that read skills):
+**3. Install the agent skill** (Claude Code, Codex and other agents that read skills):
 
 ```bash
 npx skills add nickhuo/inknotes --skill use-apple-notes -g
 ```
 
-**5. Ask your agent.** For example:
+**4. Ask your agent.** For example:
 
 > Find my notes tagged #weekly, add a to-do "Plan next sprint" to the newest one, and link it to my Roadmap note.
 

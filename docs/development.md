@@ -57,7 +57,6 @@ These rendering checks were done by hand in Notes.app. Regressions in what `inkn
 | `Sources/inknotes/SVG.swift` | SVG | SVG file → PencilKit drawing |
 | `Sources/inknotes/Core.swift` | Shared | Attribute keys, style and highlight names, JSON output and errors |
 | `tests/` | Tests | CLI contracts without store access, plus every command through the container |
-| `scripts/backup-notestore.sh` | | Backs up the real store before any manual test against it |
 
 ## Tests
 
