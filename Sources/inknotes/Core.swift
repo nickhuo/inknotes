@@ -66,7 +66,7 @@ enum FailureKind {
     static func classify(_ code: String) -> FailureKind {
         switch code {
         case "usage", "bad_index", "bad_style", "bad_highlight", "bad_url",
-             "bad_text", "bad_tag", "bad_target", "bad_table", "bad_svg",
+             "bad_text", "bad_tag", "bad_target", "bad_table",
              "bad_name", "bad_parent", "bad_folder", "file_not_found",
              "ambiguous_note", "ambiguous_folder", "ambiguous_paragraph":
             return .input

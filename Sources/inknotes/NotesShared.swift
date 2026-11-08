@@ -195,8 +195,3 @@ func objects(_ collection: Any?) -> [AnyObject] {
     func newDividerLineAttachment(identifier: String, note: AnyObject, parentAttachment: AnyObject?) -> AnyObject?
 }
 
-@objc protocol ICPaperAttachmentCreationHelperClass {
-    /// `drawing` is a PKDrawing (bridged to PKDrawingReference).
-    @objc(createSystemPaperAttachmentWithPKDrawing:inNote:)
-    func createSystemPaperAttachment(drawing: AnyObject, note: AnyObject) -> AnyObject?
-}

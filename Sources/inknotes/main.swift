@@ -294,28 +294,6 @@ func cmdAddURL(_ a: Args) {
     }
 }
 
-func cmdDraw(_ a: Args) {
-    let note = Store.note(a.positional[0])
-    let svg = a.options["svg"]!
-    let width = a.width ?? 400
-    let options = ["width": a.options["width"] ?? "400", "ink": a.options["ink"] ?? "pen", "color": a.options["color"] ?? ""]
-    let stats: [String: Any]
-    switch drawingFromSVG(path: (svg as NSString).expandingTildeInPath, width: width, color: options["color"], ink: options["ink"]!) {
-    case .success(let (_, s)): stats = s
-    case .failure(let error): fail("bad_svg", error.message)
-    }
-    let after = a.afterParagraph(note)
-    let plan: [String: Any] = ["action": "draw", "svg": svg, "drawing": stats, "options": options, "note": noteSummary(note)]
-    writeNote(a, note, plan: plan, reason: "inknotes draw") {
-        let object = makeDrawing(note, svg: svg, width: width, color: options["color"], ink: options["ink"]!)
-        let attachment = object.attribute(Key.attachment, at: 0, effectiveRange: nil) as AnyObject
-        // The paper helper may place the attachment in the text itself.
-        if !textHasAttachment(note, view(attachment, as: ICTTAttachment.self).attachmentIdentifier() ?? "") {
-            insertParagraphs(note, after: after, paragraph(object, style: newStyle(Style.body), newline: false))
-        }
-    }
-}
-
 func cmdPin(_ a: Args) {
     let note = Store.note(a.positional[0])
     let pin = a.options["undo"] == nil
@@ -390,7 +368,7 @@ func cmdAppend(_ a: Args) {
 let handlers: [String: (Args) -> Void] = [
     "find": cmdFind, "search": cmdSearch, "read": cmdRead, "backlinks": cmdBacklinks, "folders": cmdFolders, "tags": cmdTags,
     "check": cmdCheck, "set-style": cmdSetStyle, "format": cmdFormat, "add-todo": cmdAddTodo, "add-tag": cmdAddTag,
-    "link": cmdLink, "add-table": cmdAddTable, "attach": cmdAttach, "add-url": cmdAddURL, "draw": cmdDraw,
+    "link": cmdLink, "add-table": cmdAddTable, "attach": cmdAttach, "add-url": cmdAddURL,
     "pin": cmdPin, "create-folder": cmdCreateFolder, "create": cmdCreate, "append": cmdAppend,
 ]
 

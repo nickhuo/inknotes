@@ -15,7 +15,7 @@ let package = Package(
             path: "Sources/inknotes",
             exclude: ["Info.plist"],
             linkerSettings: [
-                .linkedFramework("CoreData"), .linkedFramework("PencilKit"), .linkedFramework("AppKit"),
+                .linkedFramework("CoreData"), .linkedFramework("AppKit"),
                 .unsafeFlags(["-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist", "-Xlinker", infoPlist]),
             ]
         ),

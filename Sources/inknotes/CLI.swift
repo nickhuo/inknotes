@@ -142,13 +142,6 @@ struct CommandSpec {
               example: "add-url <note> https://example.com", options: placement, writes: true),
         .init(name: "attach", positionals: [.note, Positional("file")], summary: "Plan a file attachment.",
               example: "attach <note> report.pdf", options: placement, writes: true),
-        .init(name: "draw", positionals: [.note], summary: "Plan a native, editable drawing from SVG.",
-              example: "draw <note> --svg diagram.svg --width 400",
-              options: placement + [CLIOption("svg", "FILE", "Read SVG from a file."),
-                                    CLIOption("width", "PT", "Finite positive width in points (default: 400)."),
-                                    CLIOption("ink", "pen|pencil|marker", "Drawing ink (default: pen)."),
-                                    CLIOption("color", "#rrggbb", "Override stroke color.")],
-              requires: [Requirement(["svg"], "Pass --svg <file>.")], writes: true),
         .init(name: "help", positionals: [Positional("command", required: false)], summary: "Show help without opening Notes.",
               example: "help read"),
         .init(name: "version", positionals: [], summary: "Print the version as JSON without opening Notes.",
@@ -159,7 +152,7 @@ struct CommandSpec {
         "Markdown: # ## ### headings, paragraphs, - lists, 1. lists, - [ ] / - [x] to-dos, > quotes, ``` code,",
         "**bold** *italic* ~~strike~~ ==highlight== =={pink}highlight== [text](url), #tags,",
         "[[Note title]] and [[Note title#Paragraph]] links, | tables |, --- dividers,",
-        "![](file) attachments, ![](drawing.svg) drawings, and a URL alone on a line as a link card.",
+        "![](file) attachments, and a URL alone on a line as a link card.",
     ]
 
     static func named(_ name: String) -> CommandSpec {
@@ -241,13 +234,12 @@ struct CommandSpec {
 }
 
 /// Parsed arguments. `validate` runs before any command does, so handlers can rely on
-/// required arguments being present and on `ints` and `width` holding the checked values.
+/// required arguments being present and on `ints` holding the checked values.
 struct Args {
     var command: String?
     var positional: [String] = []
     var options: [String: String] = [:]
     var ints: [String: Int] = [:]
-    var width: Double?
     var helpRequested = false
     var apply: Bool { options["apply"] != nil }
 
@@ -324,17 +316,10 @@ struct Args {
             }
             ints[key] = number
         }
-        if let value = options["width"] {
-            guard let number = Double(value), number.isFinite, number > 0 else {
-                fail("usage", "--width needs a finite number > 0; got \"\(value)\".\(hint)")
-            }
-            width = number
-        }
         if let format = options["format"], !["json", "markdown"].contains(format) {
             fail("usage", "--format must be json or markdown; got \"\(format)\".\(hint)")
         }
-        if let ink = options["ink"], !["pen", "pencil", "marker"].contains(ink) { fail("usage", "--ink must be pen, pencil or marker.\(hint)") }
-        for key in ["markdown", "svg", "tsv"] where options[key] == "" { fail("usage", "--\(key) needs a non-empty path.\(hint)") }
+        for key in ["markdown", "tsv"] where options[key] == "" { fail("usage", "--\(key) needs a non-empty path.\(hint)") }
         if let value = options["highlight"] {
             let number = Highlight.value(value)
             if number < 0 { fail("bad_highlight", "--highlight takes purple, pink, orange, mint, blue, none or 0-5.\(hint)") }

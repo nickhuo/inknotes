@@ -1,6 +1,6 @@
 ---
 name: use-apple-notes
-description: Manage the user's Apple Notes knowledge base (AI context, knowledge and task management) from the terminal with the inknotes CLI, which edits notes natively (checklists, tags, note and paragraph links, tables, headings, highlights, drawings). Use when the user asks to create, read, edit, search, or link Apple Notes, capture something to their notes, write a report into Notes, review a note's links/backlinks, or manage tasks and knowledge stored in Apple Notes. Open a note directly in Notes.app with notes://showNote?identifier=<id>.
+description: Manage the user's Apple Notes knowledge base (AI context, knowledge and task management) from the terminal with the inknotes CLI, which edits notes natively (checklists, tags, note and paragraph links, tables, headings, highlights). Use when the user asks to create, read, edit, search, or link Apple Notes, capture something to their notes, write a report into Notes, review a note's links/backlinks, or manage tasks and knowledge stored in Apple Notes. Open a note directly in Notes.app with notes://showNote?identifier=<id>.
 ---
 
 # Apple Notes knowledge base
@@ -50,7 +50,6 @@ inknotes create-folder "Name" --parent "Folder" --apply
 inknotes add-table <id> --tsv - --apply      # rows on lines, cells tab-separated
 inknotes add-url <id> https://… --apply      # link card
 inknotes attach <id> /path/file.pdf --apply
-inknotes draw <id> --svg diagram.svg [--width 400] --apply   # native, editable drawing
 ```
 
 Prefer `create`/`append` with Markdown for anything longer than a line: one save, every object native.
@@ -68,7 +67,7 @@ INKNOTES_WRITABLE_ACCOUNTS=iCloud inknotes check <id> "<to-do text>" --apply
 - `- item`, `1. item` (indent with spaces to nest), `- [ ] to-do`, `- [x] done`, `> quote`, ```` ``` ```` code blocks.
 - `**bold**`, `*italic*`, `~~strike~~`, `==highlight==` (purple) or `=={pink}text==` (pink, orange, mint, blue), `[text](https://…)`.
 - `#tag` becomes a native tag. `[[Note title]]` and `[[Note title#Paragraph text]]` become native note and paragraph links; the title must be unique in the account.
-- `| a | b |` tables become native tables; `---` becomes a divider; a URL alone on a line becomes a link card; `![alt](file.png)` attaches a file and `![alt](figure.svg)` a drawing (paths relative to the Markdown file).
+- `| a | b |` tables become native tables; `---` becomes a divider; a URL alone on a line becomes a link card; `![alt](file.png)` attaches a file (paths relative to the Markdown file).
 
 ### Formatting rules
 
@@ -88,5 +87,4 @@ This knowledge base relies on links between notes.
 ## Limits
 
 - No delete or move (notes, paragraphs, attachments), no editing of existing table cells, no text color, no locked notes. Do those in Notes.app or tell the user.
-- Drawings: SVG strokes and text become PencilKit strokes; fills are drawn as outlines and text as hollow letters.
 - Built against macOS 27.2. If a command fails with `unsupported_macos`, Notes' private API changed; tell the user instead of working around it.

@@ -93,11 +93,10 @@ def test_create_folder_and_subfolder(inknotes):
 
 @pytest.fixture(scope="module")
 def report(inknotes, tmp_path_factory):
-    """The research-report fixture, with its link target, image and drawing."""
+    """The research-report fixture, with its link target and image."""
     target = inknotes.create("# E2E Target\nalpha\n## Section B\nsection body")
     work = tmp_path_factory.mktemp("report")
-    for name in ("report.md", "house.svg"):
-        shutil.copy(FIXTURES / name, work / name)
+    shutil.copy(FIXTURES / "report.md", work / "report.md")
     write_png(work / "sample.png")
     md = str(work / "report.md")
 
@@ -110,7 +109,7 @@ def report(inknotes, tmp_path_factory):
 
 def test_report_plan_lists_every_block(report):
     kinds = [b["kind"] for b in report["plan"]["blocks"]]
-    for kind in ("para", "table", "divider", "url", "file", "drawing"):
+    for kind in ("para", "table", "divider", "url", "file"):
         assert kind in kinds
     refs = [r for b in report["plan"]["blocks"] for r in b.get("refs", [])]
     assert {"link": "E2E Target", "paragraph": None} in refs
@@ -122,37 +121,38 @@ def test_report_paragraph_styles(report):
     note = report["note"]
     assert note["title"] == "E2E Report" and note["folder"] == FOLDER
     assert paragraph(note, "E2E Report")["style"] == "title"
-    assert paragraph(note, "Summary")["style"] == "heading"
-    assert paragraph(note, "Open questions")["style"] == "subheading"
-    assert [paragraph(note, t)["style"] for t in ("First finding", "Second finding", "Third finding")] == ["numbered"] * 3
-    nested = paragraph(note, "nested bullet")
+    assert paragraph(note, "Here's to the crazy ones")["style"] == "heading"
+    assert paragraph(note, "What you can't do")["style"] == "subheading"
+    assert [paragraph(note, t)["style"] for t in ("The misfits.", "The rebels.", "The troublemakers.")] == ["numbered"] * 3
+    nested = paragraph(note, "The round pegs in the square holes.")
     assert nested["style"] == "bullet" and nested["indent"] == 1
-    assert paragraph(note, "A quote.")["quote"] == 1
-    assert paragraph(note, "Open item")["todo"]["done"] is False
-    assert paragraph(note, "Closed item")["todo"]["done"] is True
-    assert paragraph(note, "code line 1")["style"] == paragraph(note, "code line 2")["style"] == "monospaced"
+    assert paragraph(note, "Because the people who are crazy enough to think they can change the world, are the ones who do.")["quote"] == 1
+    assert paragraph(note, "Ignore them")["todo"]["done"] is False
+    assert paragraph(note, "Quote them")["todo"]["done"] is True
+    assert paragraph(note, "Think different.")["style"] == paragraph(note, "Apple, 1997")["style"] == "monospaced"
     # Every paragraph has its own identity.
     ids = [p["paragraph_id"] for p in note["paragraphs"] if "paragraph_id" in p]
     assert len(ids) == len(set(ids)) == len(note["paragraphs"])
 
 
 def test_report_inline_formatting(report):
-    line = next(p for p in report["note"]["paragraphs"] if p["text"].startswith("Text can be"))
-    spans = {f["text"]: f for f in line["formats"]}
-    assert spans["bold"]["bold"] and spans["italic"]["italic"] and spans["struck"]["strike"]
-    assert spans["highlighted"]["highlight"] == "purple"
-    assert spans["minted"]["highlight"] == "mint"
-    assert spans["web link"]["link"] == "https://www.apple.com/macos/"
-    assert "**" not in line["text"] and "==" not in line["text"]
+    paragraphs = report["note"]["paragraphs"]
+    spans = {f["text"]: f for p in paragraphs for f in p.get("formats", [])}
+    assert spans["The ones who see things differently."]["bold"]
+    assert spans["ignore"]["italic"] and spans["the crazy ones"]["strike"]
+    for word, color in (("quote", "purple"), ("disagree", "pink"), ("glorify", "orange"),
+                        ("genius", "mint"), ("vilify", "blue")):
+        assert spans[word]["highlight"] == color
+    assert spans["campaign history"]["link"] == "https://en.wikipedia.org/wiki/Think_different"
+    assert not any("**" in p["text"] or "==" in p["text"] or "~~" in p["text"] for p in paragraphs)
 
 
 def test_report_native_objects(report):
     note, target = report["note"], report["target"]
-    assert attachments(note, "table")[0]["rows"] == [["Feature", "Status"], ["Tables", "done"]]
+    assert attachments(note, "table")[0]["rows"] == [["Some see", "We see"], ["the crazy ones", "genius"]]
     assert len(attachments(note, "dividerline")) == 1
     assert attachments(note, "url")[0]["url"] == "https://www.apple.com/"
     assert attachments(note, "file")[0]["uti"] == "public.png"
-    assert attachments(note, "drawing")[0]["uti"] == "com.apple.paper"
 
     related = next(p for p in note["paragraphs"] if p["text"].startswith("Related:"))
     assert related["text"] == "Related: E2E Target and E2E Target → Section B #e2ereport"
@@ -175,12 +175,15 @@ def test_report_shows_up_in_backlinks_and_tags(inknotes, report):
 
 def test_markdown_export(inknotes, report):
     md = inknotes.markdown(report["note"]["id"])
-    for line in ("# E2E Report", "## Summary", "### Open questions", "1. First finding", "  - nested bullet",
-                 "> A quote.", "- [ ] Open item", "- [x] Closed item", "```", "code line 1",
-                 "| Feature | Status |", "| --- | --- |", "<https://www.apple.com/>"):
+    for line in ("# E2E Report", "## Here's to the crazy ones", "### What you can't do", "1. The misfits.",
+                 "  - The round pegs in the square holes.", "**The ones who see things differently.**",
+                 "> Because the people who are crazy enough to think they can change the world, are the ones who do.",
+                 "- [ ] Ignore them", "- [x] Quote them", "```", "Think different.",
+                 "| Some see | We see |", "| --- | --- |", "<https://www.apple.com/>"):
         assert line in md.splitlines(), line
-    assert "**bold**" in md and "*italic*" in md and "~~struck~~" in md
-    assert "==highlighted==" in md and "=={mint}minted==" in md
+    assert "*ignore*" in md and "~~the crazy ones~~" in md and "==quote==" in md
+    for word, color in (("disagree", "pink"), ("glorify", "orange"), ("genius", "mint"), ("vilify", "blue")):
+        assert f"=={{{color}}}{word}==" in md
     assert f"[E2E Target](applenotes:note/{report['target']['id'].lower()})" in md
 
 
@@ -309,7 +312,7 @@ def test_format_and_plain(inknotes):
     errors(inknotes, "usage", "format", note["id"], line)
 
 
-# Pinning, attachments, drawings
+# Pinning and attachments
 
 
 def test_pin_and_unpin(inknotes):
@@ -329,51 +332,6 @@ def test_attach_file_and_link_card(inknotes, tmp_path):
     assert attachments(result, "url")[0]["url"] == "https://www.apple.com/"
     errors(inknotes, "file_not_found", "attach", note["id"], str(tmp_path / "missing.png"))
     errors(inknotes, "bad_url", "add-url", note["id"], "not a url")
-
-
-def test_draw_svg(inknotes, tmp_path):
-    note = inknotes.create("# Drawing\nbody")
-    svg = str(FIXTURES / "house.svg")
-    plan = inknotes("draw", note["id"], "--svg", svg, "--width", "300", "--ink", "marker", "--color", "#d946ef")["plan"]
-    assert plan["drawing"]["strokes"] == 7 and plan["drawing"]["size"][0] == 300
-    result = inknotes("draw", note["id"], "--svg", svg, "--apply")["note"]
-    assert attachments(result, "drawing")[0]["uti"] == "com.apple.paper"
-    (tmp_path / "empty.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"></svg>')
-    errors(inknotes, "bad_svg", "draw", note["id"], "--svg", str(tmp_path / "empty.svg"))
-
-
-@pytest.mark.parametrize("svg, strokes", [("house.svg", 7), ("shapes.svg", 15), ("pipeline.svg", 109), ("widths.svg", 10), ("text.svg", 136)])
-@pytest.mark.parametrize("width", ["400", "160"])
-def test_drawing_follows_the_svg(inknotes, svg, strokes, width):
-    """The drawn line must stay on the SVG's outline (PencilKit smooths points into a spline)
-    and be as wide as the SVG says (PencilKit's point size is not the drawn width)."""
-    note = inknotes.create("# Fidelity\nbody")
-    drawing = inknotes("draw", note["id"], "--svg", str(FIXTURES / svg), "--width", width)["plan"]["drawing"]
-    assert drawing["strokes"] == strokes
-    assert drawing["max_deviation"] < 1.5, f"{svg} at width {width}: strayed {drawing['max_deviation']} pt from the outline"
-    low, high = drawing["width_ratio"]
-    assert 0.8 <= low and high <= 1.25, f"{svg} at width {width}: drawn width is {low}–{high}× the SVG's stroke width"
-
-
-@pytest.mark.parametrize("svg, texts, glyphs", [("text.svg", 6, 49), ("pipeline.svg", 9, 39)])
-def test_drawing_text_becomes_glyph_outlines(inknotes, svg, texts, glyphs):
-    """Every visible character, Latin or Chinese, becomes outline strokes (spaces have none)."""
-    note = inknotes.create("# Text drawing\nbody")
-    drawing = inknotes("draw", note["id"], "--svg", str(FIXTURES / svg))["plan"]["drawing"]
-    assert (drawing["text"], drawing["glyphs"]) == (texts, glyphs)
-    result = inknotes("draw", note["id"], "--svg", str(FIXTURES / svg), "--apply")["note"]
-    assert attachments(result, "drawing")[0]["uti"] == "com.apple.paper"
-
-
-@pytest.mark.parametrize("ink, low_bound, high_bound", [("pencil", 0.6, 1.4), ("marker", 0.5, 1.5)])
-@pytest.mark.parametrize("svg", ["shapes.svg", "widths.svg"])
-def test_other_inks_draw_close_to_the_svg_width(inknotes, svg, ink, low_bound, high_bound):
-    """Pencil has a textured edge and marker a chisel nib that is thinner across horizontal
-    lines, so their widths vary more than the pen's; none may vanish or balloon."""
-    note = inknotes.create("# Inks\nbody")
-    drawing = inknotes("draw", note["id"], "--svg", str(FIXTURES / svg), "--ink", ink)["plan"]["drawing"]
-    low, high = drawing["width_ratio"]
-    assert low_bound <= low and high <= high_bound, f"{svg} with {ink}: drawn width is {low}–{high}× the SVG's stroke width"
 
 
 def test_append_markdown(inknotes):
@@ -396,7 +354,7 @@ def test_dry_runs_change_nothing(inknotes, tmp_path):
     before = (inknotes.read(note), inknotes("find"), inknotes("folders"), inknotes("tags"))
     for args in (["check", "item"], ["add-todo", "new"], ["add-tag", "drytag"], ["link", other["id"]],
                  ["set-style", "text", "heading"], ["format", "text", "--bold"], ["pin"],
-                 ["attach", str(png)], ["add-url", "https://example.com/"], ["draw", "--svg", str(FIXTURES / "house.svg")]):
+                 ["attach", str(png)], ["add-url", "https://example.com/"]):
         assert inknotes(args[0], note["id"], *args[1:])["dry_run"], args
     assert inknotes("add-table", note["id"], "--tsv", "-", stdin="a\tb")["dry_run"]
     assert inknotes("append", note["id"], "--markdown", "-", stdin="more")["dry_run"]
