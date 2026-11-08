@@ -111,10 +111,7 @@ func cmdSearch(_ a: Args) {
         }
     }
     emit(searchResults(notes, query: query, limit: a.ints["limit"] ?? 20,
-                       body: { note in
-                           if responds(note, "noteAsPlainText"), let plain = view(note, as: ICNote.self).noteAsPlainText() { return plain }
-                           return bodyTextSafe(note)?.string
-                       }, summary: noteSummary))
+                       body: { view($0, as: ICNote.self).noteAsPlainText() }, summary: noteSummary))
 }
 
 func cmdTags(_ a: Args) {

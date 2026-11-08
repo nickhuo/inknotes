@@ -6,15 +6,6 @@ Agents can already reach Apple Notes through AppleScript and the tools built on 
 
 inknotes edits notes through the same framework Notes.app itself uses. Everything it writes is a real Notes object: a to-do you can tick on your phone, a tag that shows up in the tag browser, a link that opens the other note.
 
-| Your agent wants to… | Through AppleScript | With inknotes |
-|---|---|---|
-| Add or check off a to-do | Writes a plain bullet | Native to-do, checked or unchecked |
-| Tag a note | Writes the text `#tag` | Native tag, listed in Notes' tag browser |
-| Link to another note, or to one paragraph in it | Not possible | Native note link or paragraph link |
-| Ask "which notes link here?" | Not possible | `inknotes backlinks <note>` |
-| Find a note by what it says | Title or body search | `inknotes search` returns a snippet around each match |
-| Turn a Markdown report into a note | Plain HTML | Headings, highlights, tables, link cards, images and drawings, in one save |
-
 ## Before you install
 
 - **Supported platform:** macOS 27.2 on Apple silicon.
@@ -36,7 +27,7 @@ Run the same command to update. Use this command rather than a browser download:
 
 **2. Give your terminal Full Disk Access.** inknotes reads the Notes database directly, so the app that starts it needs this permission.
 
-1. Open System Settings → Privacy & Security → Full Disk Access.
+1. Open System Settings → Privacy &amp; Security → Full Disk Access.
 2. Click **+**, choose your terminal app (Terminal is in Applications → Utilities), and turn it on.
 3. Quit and reopen the terminal, because the permission applies only to newly started apps.
 
@@ -62,7 +53,7 @@ Three safeguards apply while you try it: every write is a dry run until `--apply
 
 ### Using iCloud
 
-iCloud is supported and opt-in. To let inknotes write to notes in iCloud, set `INKNOTES_WRITABLE_ACCOUNTS=iCloud` (or `On My Mac,iCloud`) in the environment your agent runs in. Notes.app does the upload, usually within 15–90 seconds, though one edit once took several minutes.
+iCloud is supported and opt-in. To let inknotes write to notes in iCloud, set `INKNOTES_WRITABLE_ACCOUNTS=iCloud` (or `On My Mac,iCloud`) in the environment your agent runs in.
 
 ## Use the CLI directly
 
@@ -82,24 +73,6 @@ inknotes link "$NOTE" "$ROADMAP" --paragraph "Q4 goals" --apply # link to one pa
 ```
 
 Not supported yet: deleting or moving notes, editing table cells, text color, and locked notes.
-
-## Deliberate exceptions to the CLI Design Guidelines
-
-These exceptions preserve the local agent workflow while applying
-[Vercel's CLI Design Guidelines](https://vercel.com/design/cli):
-
-| Guide rule | Reason for the exception | User impact |
-|---|---|---|
-| Ordinary narrow writes run directly; preview is a separate dry-run mode | Notes contain personal knowledge, so every write keeps its existing dry-run default | Inspect the plan, then explicitly pass `--apply` to make a change; no prompt is required |
-| Human output is the default, `--json` selects machine output, and `--version` prints only the version | Agents already consume JSON without a format switch, including `version` | No `--json` option; results and both version forms stay JSON. Help is text, and `read --format markdown` remains Markdown |
-| Use noun groups and separate verbs; never fuse them in names such as `create-store` | Renaming existing commands requires a separate compatibility decision | Keep `add-todo`, `set-style`, `create-folder` and all other command names |
-| Machine documents use the guide's result shapes and error `reason` key | Existing consumers depend on inknotes' keys, error codes and sorted error lines | Preserve the current JSON schema and `error` key; add `status`, `retryable`, and search coverage fields only |
-
-## More
-
-- [Reference](docs/reference.md): every command, help and parsing rules, the Markdown it understands, output formats, error codes, exit codes and limits
-- [Development](docs/development.md): building, how a write works, tests
-- [Agent skill](skills/use-apple-notes/SKILL.md): what your agent is taught
 
 ## License
 
