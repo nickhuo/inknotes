@@ -13,11 +13,11 @@ COMMANDS = {
     "find": 1, "search": 1, "read": 1, "backlinks": 1, "folders": 0, "tags": 0,
     "create": 1, "append": 1, "create-folder": 1, "pin": 1, "set-style": 3,
     "format": 2, "check": 2, "add-todo": 2, "add-tag": 2, "link": 2,
-    "add-table": 1, "add-url": 2, "attach": 2, "draw": 1, "help": 1, "version": 0,
+    "add-table": 1, "add-url": 2, "attach": 2, "help": 1, "version": 0,
 }
 WRITES = {
     "create", "append", "create-folder", "pin", "set-style", "format", "check",
-    "add-todo", "add-tag", "link", "add-table", "add-url", "attach", "draw",
+    "add-todo", "add-tag", "link", "add-table", "add-url", "attach",
 }
 
 
@@ -66,9 +66,9 @@ def test_help_at_every_depth(cli, command):
 
 
 def test_discovery_skips_other_validation(cli):
-    p = cli("draw", "--width", "abc", "--aply", "--help")
+    p = cli("append", "--width", "abc", "--aply", "--help")
     assert p.returncode == 0 and p.stderr == ""
-    assert "Usage: inknotes draw" in p.stdout
+    assert "Usage: inknotes append" in p.stdout
     p = cli("read", "--help", "--version")
     assert "Usage: inknotes read" in p.stdout
     assert p.returncode == 0 and p.stderr == ""
@@ -95,7 +95,7 @@ def test_extra_positionals_rejected(cli, command, max_args):
 
 @pytest.mark.parametrize("args", [
     ["frobnicate"], ["help", "frobnicate"], ["frobnicate", "--help"],
-    ["read"], ["search"], ["draw", "note"], ["append", "note"],
+    ["read"], ["search"], ["append", "note"],
     ["add-table", "note"], ["create"], ["check", "note"],
     ["find", "--apply"], ["read", "note", "--limit", "5"],
     ["pin", "note", "--bold"], ["find", "--limit"],
@@ -113,7 +113,6 @@ def test_usage_errors_before_store_open(cli, args):
     ["find", "--limit", "99999999999999999999999"],
     ["set-style", "note", "item", "body", "--indent", "abc"],
     ["set-style", "note", "item", "body", "--indent=-1"],
-    *[["draw", "note", "--svg", "missing.svg", "--width", v] for v in ["abc", "0", "-1", "nan", "inf"]],
     ["read", "note", "--format", "xml"],
 ])
 def test_invalid_values_fail_before_store_open(cli, args):
@@ -132,7 +131,7 @@ def test_double_dash_keeps_options_literal(cli, args):
 def test_markdown_syntax_on_write_help(cli, command):
     page = cli(command, "--help").stdout
     for syntax in ["# ## ### headings", "- [ ] / - [x] to-dos", "==highlight==", "[[Note title]]",
-                   "[[Note title#Paragraph]]", "--- dividers", "![](drawing.svg)", "a URL alone on a line"]:
+                   "[[Note title#Paragraph]]", "--- dividers", "![](file)", "a URL alone on a line"]:
         assert syntax in page
 
 
@@ -191,7 +190,7 @@ def test_option_value_with_leading_dashes_parses_with_equals(harness):
     (["format", "n", "x", "--link", "nope"], "bad_url", "--link needs a full URL"),
     (["check", "n", "--index", "abc"], "bad_index", "--index needs an integer"),
     (["link", "n", "t", "--paragraph-index", "abc"], "bad_index", "--paragraph-index needs an integer"),
-    (["append", "n"], "usage", "--markdown"), (["add-table", "n"], "usage", "--tsv"), (["draw", "n"], "usage", "--svg"),
+    (["append", "n"], "usage", "--markdown"), (["add-table", "n"], "usage", "--tsv"),
 ])
 def test_argument_errors_keep_their_codes(cli, args, code, text):
     assert text in error(cli(*args), code=code)["message"]
@@ -199,7 +198,6 @@ def test_argument_errors_keep_their_codes(cli, args, code, text):
 
 def test_required_options_appear_in_usage(cli):
     assert "Usage: inknotes append <note> --markdown FILE|- [options]" in cli("append", "--help").stdout
-    assert "Usage: inknotes draw <note> --svg FILE [options]" in cli("draw", "--help").stdout
     assert "Usage: inknotes set-style <note> [item] [style] [options]" in cli("set-style", "--help").stdout
 
 
@@ -253,8 +251,6 @@ def test_parser_values_and_safety_default(harness):
     assert json.loads(p.stdout)["positional"] == ["note", "--literal-text"]
     p = harness("parse", "add-todo", "note", "--", "- leading dash")
     assert json.loads(p.stdout)["positional"] == ["note", "- leading dash"]
-    p = harness("parse", "draw", "note", "--svg=test.svg", "--width=12.5")
-    assert json.loads(p.stdout)["options"]["width"] == "12.5"
     p = harness("parse", "set-style", "note", "item", "HEADING")
     assert json.loads(p.stdout)["ints"] == {"style": 1}
     p = harness("parse", "set-style", "note", "--index=0", "--style=body", "--indent=0")

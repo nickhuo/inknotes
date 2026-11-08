@@ -1,11 +1,10 @@
 // Native Notes objects. Each make function creates the object in `note` with
 // Notes' own constructor and returns the one attachment character to insert
 // into the text. Call them inside Store.commit; they fail with a JSON error
-// (unsupported_macos, file_not_found, bad_url, bad_svg, ...).
+// (unsupported_macos, file_not_found, bad_url, ...).
 
 import AppKit
 import Foundation
-import PencilKit
 
 /// The attachment character (U+FFFC) for an attachment.
 func objectChar(_ identifier: String, _ uti: String) -> NSAttributedString {
@@ -14,18 +13,6 @@ func objectChar(_ identifier: String, _ uti: String) -> NSAttributedString {
     tt.setAttachmentIdentifier(identifier)
     tt.setAttachmentUTI(uti)
     return NSAttributedString(string: "\u{FFFC}", attributes: [Key.attachment: object])
-}
-
-func textHasAttachment(_ note: AnyObject, _ identifier: String) -> Bool {
-    let text = bodyText(note)
-    var found = false
-    text.enumerateAttribute(Key.attachment, in: NSRange(location: 0, length: text.length)) { value, _, stop in
-        if let value, view(value as AnyObject, as: ICTTAttachment.self).attachmentIdentifier() == identifier {
-            found = true
-            stop.pointee = true
-        }
-    }
-    return found
 }
 
 // MARK: Relative paths in Markdown resolve against the Markdown file's folder.
@@ -122,14 +109,3 @@ func makeURLCard(_ note: AnyObject, _ urlString: String) -> NSAttributedString {
     return objectFor(attachment, "link card")
 }
 
-/// width in points, ink (pen, pencil, marker), color (#rrggbb).
-func makeDrawing(_ note: AnyObject, svg path: String, width: Double = 400, color: String? = nil, ink: String = "pen") -> NSAttributedString {
-    requireClassMethod("ICPaperAttachmentCreationHelper", "createSystemPaperAttachmentWithPKDrawing:inNote:", "Cannot create drawings on this macOS.")
-    let result = drawingFromSVG(path: resolvePath(path), width: width, color: color, ink: ink)
-    guard case .success(let (drawing, _)) = result else {
-        if case .failure(let error) = result { fail("bad_svg", error.message) }
-        fail("bad_svg", "The SVG could not be converted.")
-    }
-    let helper = NotesShared.classObject("ICPaperAttachmentCreationHelper", as: ICPaperAttachmentCreationHelperClass.self)
-    return objectFor(helper.createSystemPaperAttachment(drawing: drawing as AnyObject, note: note), "drawing")
-}

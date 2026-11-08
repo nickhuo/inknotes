@@ -10,7 +10,7 @@
 import Foundation
 
 struct Block {
-    enum Kind: String { case para, table, file, url, drawing, divider }
+    enum Kind: String { case para, table, file, url, divider }
     var kind: Kind
     var style = Style.body
     var indent = 0
@@ -154,7 +154,7 @@ func parseMarkdown(_ markdown: String) -> [Block] {
         if t == "---" || t == "***" { blocks.append(Block(kind: .divider)); continue }
         if let m = firstMatch(imageRe, t) {
             let src = (t as NSString).substring(with: m.range(at: 1))
-            blocks.append(Block(kind: (src as NSString).pathExtension.lowercased() == "svg" ? .drawing : .file, value: src))
+            blocks.append(Block(kind: .file, value: src))
             continue
         }
         if let m = firstMatch(urlRe, t) { blocks.append(Block(kind: .url, value: (t as NSString).substring(with: m.range(at: 1)))); continue }
@@ -326,7 +326,7 @@ func planBlocks(_ blocks: [Block], account: AnyObject) -> [[String: Any]] {
             if !refs.isEmpty { p["refs"] = refs }
         case .table:
             p["rows"] = b.rows
-        case .file, .url, .drawing:
+        case .file, .url:
             p["value"] = b.value
             if b.kind != .url && !FileManager.default.isReadableFile(atPath: resolvePath(b.value)) { fail("file_not_found", "Cannot read \(b.value).") }
         case .divider:
@@ -352,7 +352,6 @@ func renderBlocks(_ blocks: [Block], note: AnyObject, account: AnyObject) -> NSA
             case .table: content = makeTable(note, b.rows)
             case .file: content = makeFile(note, b.value)
             case .url: content = makeURLCard(note, b.value)
-            case .drawing: content = makeDrawing(note, svg: b.value)
             default: content = makeDivider(note)
             }
         }
