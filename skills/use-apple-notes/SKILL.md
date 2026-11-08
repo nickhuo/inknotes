@@ -37,7 +37,7 @@ inknotes tags [--account iCloud]      # tags and how many notes use each
 ## Writing
 
 ```bash
-inknotes create "Title" --folder "Folder/Sub" --markdown note.md --apply
+inknotes create --folder "Folder/Sub" --markdown note.md --apply   # first line, "# Title", is the title
 inknotes append <id> --markdown - [--after "<paragraph text>"] --apply   # Markdown on stdin
 inknotes check <id> "<to-do text>" [--undo] --apply
 inknotes add-todo <id> "text" [--after "<paragraph text>"] --apply
@@ -57,7 +57,7 @@ Prefer `create`/`append` with Markdown for anything longer than a line: one save
 These write to `On My Mac`. When the user asks you to write to iCloud, prefix that command with the variable, and add `--account iCloud` to `create` and `create-folder`:
 
 ```bash
-INKNOTES_WRITABLE_ACCOUNTS=iCloud inknotes create "Title" --account iCloud --markdown note.md --apply
+INKNOTES_WRITABLE_ACCOUNTS=iCloud inknotes create --account iCloud --markdown note.md --apply
 INKNOTES_WRITABLE_ACCOUNTS=iCloud inknotes check <id> "<to-do text>" --apply
 ```
 
@@ -71,7 +71,7 @@ INKNOTES_WRITABLE_ACCOUNTS=iCloud inknotes check <id> "<to-do text>" --apply
 
 ### Formatting rules
 
-- Keep the first line short: it is the note's title.
+- Start with `# Title`, kept short: the first line is the note's title.
 - Use headings for structure; they are real Notes headings.
 - A blank line becomes one empty paragraph. Put one between blocks (paragraph, list, table) and none between items of the same list.
 - No decorative emoji unless the user asks for them or they carry task-critical meaning.

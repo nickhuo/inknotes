@@ -101,9 +101,9 @@ def report(inknotes, tmp_path_factory):
     md = str(work / "report.md")
 
     before = inknotes("find")["total"]
-    plan = inknotes("create", "E2E Report", "--folder", FOLDER, "--markdown", md)
+    plan = inknotes("create", "--folder", FOLDER, "--markdown", md)
     assert plan["dry_run"] and inknotes("find")["total"] == before, "a dry run must not create anything"
-    note = inknotes("create", "E2E Report", "--folder", FOLDER, "--markdown", md, "--apply")["note"]
+    note = inknotes("create", "--folder", FOLDER, "--markdown", md, "--apply")["note"]
     return {"note": note, "target": inknotes.read(target), "plan": plan["plan"]}
 
 
@@ -119,8 +119,8 @@ def test_report_plan_lists_every_block(report):
 
 def test_report_paragraph_styles(report):
     note = report["note"]
-    assert note["title"] == "E2E Report" and note["folder"] == FOLDER
-    assert paragraph(note, "E2E Report")["style"] == "title"
+    assert note["title"] == "Think Different" and note["folder"] == FOLDER
+    assert paragraph(note, "Think Different")["style"] == "title"
     assert paragraph(note, "Here's to the crazy ones")["style"] == "heading"
     assert paragraph(note, "What you can't do")["style"] == "subheading"
     assert [paragraph(note, t)["style"] for t in ("The misfits.", "The rebels.", "The troublemakers.")] == ["numbered"] * 3
@@ -175,7 +175,7 @@ def test_report_shows_up_in_backlinks_and_tags(inknotes, report):
 
 def test_markdown_export(inknotes, report):
     md = inknotes.markdown(report["note"]["id"])
-    for line in ("# E2E Report", "## Here's to the crazy ones", "### What you can't do", "1. The misfits.",
+    for line in ("# Think Different", "## Here's to the crazy ones", "### What you can't do", "1. The misfits.",
                  "  - The round pegs in the square holes.", "**The ones who see things differently.**",
                  "> Because the people who are crazy enough to think they can change the world, are the ones who do.",
                  "- [ ] Ignore them", "- [x] Quote them", "```", "Think different.",
@@ -342,6 +342,11 @@ def test_append_markdown(inknotes):
     assert texts[texts.index("first") + 1:texts.index("last")] == ["Inserted", "inserted todo #appended"]
     assert paragraph(result, "Inserted")["style"] == "heading"
     errors(inknotes, "usage", "append", note["id"], "--markdown", "-", stdin="\n")
+
+
+def test_create_takes_the_title_from_markdown_only(inknotes):
+    errors(inknotes, "usage", "create", "Title", "--folder", FOLDER, "--markdown", "-", stdin="body")
+    errors(inknotes, "usage", "create", "--folder", FOLDER, "--markdown", "-", stdin="\n\n")
 
 
 # Safety
