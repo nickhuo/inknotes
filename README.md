@@ -72,7 +72,7 @@ iCloud is supported and opt-in. To let inknotes write to notes in iCloud, set `I
 
 ## Use the CLI directly
 
-Every command prints JSON. Writes only print their plan until you add `--apply`.
+Every command prints JSON, and help prints text. Writes only print their plan until you add `--apply`.
 
 ```bash
 inknotes find "Weekly review"                     # notes by title
@@ -89,9 +89,21 @@ inknotes link "$NOTE" "$ROADMAP" --paragraph "Q4 goals" --apply # link to one pa
 
 Not supported yet: deleting or moving notes, editing table cells, text color, and locked notes.
 
+## Deliberate exceptions to the CLI Design Guidelines
+
+These exceptions preserve the local agent workflow while applying
+[Vercel's CLI Design Guidelines](https://vercel.com/design/cli):
+
+| Guide rule | Reason for the exception | User impact |
+|---|---|---|
+| Ordinary narrow writes run directly; preview is a separate dry-run mode | Notes contain personal knowledge, so every write keeps its existing dry-run default | Inspect the plan, then explicitly pass `--apply` to make a change; no prompt is required |
+| Human output is the default, `--json` selects machine output, and `--version` prints only the version | Agents already consume JSON without a format switch, including `version` | No `--json` option; results and both version forms stay JSON. Help is text, and `read --format markdown` remains Markdown |
+| Use noun groups and separate verbs; never fuse them in names such as `create-store` | Renaming existing commands requires a separate compatibility decision | Keep `add-todo`, `set-style`, `create-folder` and all other command names |
+| Machine documents use the guide's result shapes and error `reason` key | Existing consumers depend on inknotes' keys, error codes and sorted error lines | Preserve the current JSON schema and `error` key; add `status`, `retryable`, and search coverage fields only |
+
 ## More
 
-- [Reference](docs/reference.md): every command, the Markdown it understands, output formats, error codes and limits
+- [Reference](docs/reference.md): every command, help and parsing rules, the Markdown it understands, output formats, error codes, exit codes and limits
 - [Development](docs/development.md): building, how a write works, tests
 - [Agent skill](skills/use-apple-notes/SKILL.md): what your agent is taught
 

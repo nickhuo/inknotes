@@ -1,5 +1,6 @@
 // inknotes: read and edit Apple Notes natively through Notes' private NotesShared
-// framework. This file is the command-line interface: arguments, commands, help.
+// framework. This file holds the commands and dispatches to them; CLI.swift parses
+// and validates arguments and renders help.
 
 import Foundation
 
@@ -7,39 +8,11 @@ let version = "0.4.0"
 
 // MARK: - Arguments
 
-struct Args {
-    var command: String?
-    var positional: [String] = []
-    var options: [String: String] = [:]
-    var apply = false
-
-    static let flags: Set<String> = ["undo", "bold", "italic", "underline", "strike", "plain"]
-
-    init(_ argv: [String]) {
-        var i = 0
-        while i < argv.count {
-            let s = argv[i]
-            if s == "--apply" { apply = true }
-            else if s.hasPrefix("--"), Args.flags.contains(String(s.dropFirst(2))) { options[String(s.dropFirst(2))] = "1" }
-            else if s.hasPrefix("--"), i + 1 < argv.count { options[String(s.dropFirst(2))] = argv[i + 1]; i += 1 }
-            else if s.hasPrefix("--") { fail("usage", "\(s) needs a value.") }
-            else if command == nil { command = s }
-            else { positional.append(s) }
-            i += 1
-        }
-    }
-
-    func need(_ i: Int, _ what: String) -> String {
-        if positional.count <= i { fail("usage", "Missing \(what). Run `inknotes help`.") }
-        return positional[i]
-    }
-
-    func positional(_ i: Int) -> String? { positional.count > i ? positional[i] : nil }
-
+extension Args {
     /// The paragraph --after or --index names, or -1 for the end of the note.
     func afterParagraph(_ note: AnyObject) -> Int {
         if options["after"] == nil && options["index"] == nil { return -1 }
-        return findParagraph(paragraphsJSON(bodyText(note)), text: options["after"], index: options["index"])
+        return findParagraph(paragraphsJSON(bodyText(note)), text: options["after"], index: ints["index"])
     }
 }
 
@@ -73,19 +46,18 @@ func cmdFind(_ a: Args) {
     }
     if a.options["pinned"] != nil { notes = notes.filter(isPinned) }
     notes.sort { (kv($0, "modificationDate") as? Date ?? .distantPast) > (kv($1, "modificationDate") as? Date ?? .distantPast) }
-    let limit = a.options["limit"].flatMap { Int($0) } ?? 20
-    let out = notes.prefix(max(limit, 0)).map(noteSummary)
+    let out = notes.prefix(a.ints["limit"] ?? 20).map(noteSummary)
     emit(["notes": out, "count": out.count, "total": notes.count])
 }
 
 func cmdRead(_ a: Args) {
-    let note = Store.note(a.need(0, "note"))
+    let note = Store.note(a.positional[0])
     if a.options["format"] == "markdown" { FileHandle.standardOutput.write(Data(noteMarkdown(note).utf8)) }
     else { emit(noteJSON(note)) }
 }
 
 func cmdBacklinks(_ a: Args) {
-    let note = Store.note(a.need(0, "note"))
+    let note = Store.note(a.positional[0])
     let ident = kv(note, "identifier") as? String ?? ""
     let links = Store.fetch("ICInlineAttachment", NSPredicate(format: "typeUTI == %@ AND tokenContentIdentifier CONTAINS[c] %@ AND markedForDeletion == NO",
                                                               UTI.link, ident))
@@ -127,7 +99,7 @@ func cmdFolders(_ a: Args) {
 }
 
 func cmdSearch(_ a: Args) {
-    let query = a.need(0, "search query")
+    let query = a.positional[0]
     var notes = Store.visibleNotes()
     if let account = a.options["account"] {
         notes = notes.filter { (kvPath($0, "account.name") as? String ?? "").caseInsensitiveCompare(account) == .orderedSame }
@@ -138,34 +110,8 @@ func cmdSearch(_ a: Args) {
             return folderPath(folder).caseInsensitiveCompare(f) == .orderedSame || kv(folder, "identifier") as? String == f
         }
     }
-    let limit = a.options["limit"].flatMap { Int($0) } ?? 20
-    var results: [[String: Any]] = []
-    for note in notes {
-        guard let bodyAttr = bodyTextSafe(note) else { continue }
-        let body = bodyAttr.string
-        guard let range = body.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) else { continue }
-        var entry = noteSummary(note)
-        entry["snippet"] = searchSnippet(body, around: range)
-        results.append(entry)
-        if results.count >= limit { break }
-    }
-    emit(["notes": results, "count": results.count])
-}
-
-func searchSnippet(_ body: String, around range: Range<String.Index>) -> String {
-    let pad = 80
-    let lo = body.distance(from: body.startIndex, to: range.lowerBound)
-    let hi = body.distance(from: body.startIndex, to: range.upperBound)
-    let startOff = max(0, lo - pad)
-    let endOff = min(body.count, hi + pad)
-    let start = body.index(body.startIndex, offsetBy: startOff)
-    let end = body.index(body.startIndex, offsetBy: endOff)
-    var snippet = String(body[start..<end])
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-        .replacingOccurrences(of: "\n", with: " ")
-    if startOff > 0 { snippet = "…" + snippet }
-    if endOff < body.count { snippet += "…" }
-    return snippet
+    emit(searchResults(notes, query: query, limit: a.ints["limit"] ?? 20,
+                       body: { bodyTextSafe($0)?.string }, summary: noteSummary))
 }
 
 func cmdTags(_ a: Args) {
@@ -190,9 +136,9 @@ func cmdTags(_ a: Args) {
 // MARK: - Write commands
 
 func cmdCheck(_ a: Args) {
-    let note = Store.note(a.need(0, "note"))
+    let note = Store.note(a.positional[0])
     let paragraphs = paragraphsJSON(bodyText(note))
-    let index = findParagraph(paragraphs, text: a.positional(1), index: a.options["index"])
+    let index = findParagraph(paragraphs, text: a.positional(1), index: a.ints["index"])
     let done = a.options["undo"] == nil
     let p = paragraphs[index]
     guard let todo = p["todo"] as? [String: Any] else { fail("not_a_todo", "Paragraph \(index) is not a checklist item.") }
@@ -211,14 +157,11 @@ func cmdCheck(_ a: Args) {
 }
 
 func cmdSetStyle(_ a: Args) {
-    let note = Store.note(a.need(0, "note"))
-    let styleArg = a.options["style"] ?? a.positional(2)
-    guard let style = styleArg.flatMap({ Style.names[$0.lowercased()] }) else {
-        fail("bad_style", "Style must be one of: \(Style.names.keys.joined(separator: ", ")).")
-    }
+    let note = Store.note(a.positional[0])
+    let style = a.ints["style"]!
     let paragraphs = paragraphsJSON(bodyText(note))
-    let index = findParagraph(paragraphs, text: a.positional(1), index: a.options["index"])
-    let plan: [String: Any] = ["action": "set-style", "style": styleArg!.lowercased(), "paragraph": paragraphs[index], "note": noteSummary(note)]
+    let index = findParagraph(paragraphs, text: a.positional(1), index: a.ints["index"])
+    let plan: [String: Any] = ["action": "set-style", "style": Style.name(style), "paragraph": paragraphs[index], "note": noteSummary(note)]
     writeNote(a, note, plan: plan, reason: "inknotes set-style") {
         let text = bodyText(note)
         let range = paragraphRanges(text)[index]
@@ -229,27 +172,19 @@ func cmdSetStyle(_ a: Args) {
         if style == Style.checklist { if s.todo() == nil { s.setTodo(newTodo(done: false)) } }
         else { s.setTodo(nil) }
         if style < Style.bullet { s.setIndent(0) }
-        if let indent = a.options["indent"] { s.setIndent(Int(indent) ?? 0) }
+        if let indent = a.ints["indent"] { s.setIndent(indent) }
         setParagraphStyle(note, text, range.enclosing, object)
     }
 }
 
 func cmdFormat(_ a: Args) {
-    let note = Store.note(a.need(0, "note"))
+    let note = Store.note(a.positional[0])
     let paragraphs = paragraphsJSON(bodyText(note))
-    let index = findParagraph(paragraphs, text: a.positional(1), index: a.options["index"])
+    let index = findParagraph(paragraphs, text: a.positional(1), index: a.ints["index"])
     var changes: [String: Any] = [:]
     for k in ["bold", "italic", "underline", "strike", "plain"] where a.options[k] != nil { changes[k] = true }
-    if let h = a.options["highlight"] {
-        let value = Highlight.value(h)
-        if value < 0 { fail("bad_highlight", "--highlight takes purple, pink, orange, mint or blue (or 1-5), or none to remove it.") }
-        changes["highlight"] = value
-    }
-    if let link = a.options["link"] {
-        if link.isEmpty || URL(string: link)?.scheme == nil { fail("bad_url", "--link needs a full URL.") }
-        changes["link"] = link
-    }
-    if changes.isEmpty { fail("usage", "Pass at least one of --bold --italic --underline --strike --highlight N --link URL --plain.") }
+    if let highlight = a.ints["highlight"] { changes["highlight"] = highlight }
+    if let link = a.options["link"] { changes["link"] = link }
     // The text to format: the whole paragraph, or the first occurrence of --text in it.
     let before = bodyText(note)
     let ns = before.string as NSString
@@ -280,8 +215,8 @@ func cmdFormat(_ a: Args) {
 }
 
 func cmdAddTodo(_ a: Args) {
-    let note = Store.note(a.need(0, "note"))
-    let text = a.need(1, "todo text")
+    let note = Store.note(a.positional[0])
+    let text = a.positional[1]
     if text.contains("\n") { fail("bad_text", "Todo text must be one line.") }
     let paragraphs = paragraphsJSON(bodyText(note))
     var after = a.afterParagraph(note)
@@ -298,8 +233,8 @@ func cmdAddTodo(_ a: Args) {
 }
 
 func cmdAddTag(_ a: Args) {
-    let note = Store.note(a.need(0, "note"))
-    let tag = a.need(1, "tag").trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+    let note = Store.note(a.positional[0])
+    let tag = a.positional[1].trimmingCharacters(in: CharacterSet(charactersIn: "# "))
     if tag.isEmpty || tag.rangeOfCharacter(from: .whitespacesAndNewlines) != nil { fail("bad_tag", "A tag is one word without spaces.") }
     let after = a.afterParagraph(note)
     writeNote(a, note, plan: ["action": "add-tag", "tag": "#" + tag, "note": noteSummary(note)], reason: "inknotes add-tag") {
@@ -308,14 +243,14 @@ func cmdAddTag(_ a: Args) {
 }
 
 func cmdLink(_ a: Args) {
-    let note = Store.note(a.need(0, "note"))
-    let target = Store.note(a.need(1, "target note"))
+    let note = Store.note(a.positional[0])
+    let target = Store.note(a.positional[1])
     let toParagraph = a.options["paragraph"] != nil || a.options["paragraph-index"] != nil
     if note === target && !toParagraph { fail("bad_target", "A note cannot link to itself (link to one of its paragraphs instead).") }
     var targetParagraph: [String: Any]?
     if toParagraph {
         let paragraphs = paragraphsJSON(bodyText(target))
-        targetParagraph = paragraphs[findParagraph(paragraphs, text: a.options["paragraph"], index: a.options["paragraph-index"])]
+        targetParagraph = paragraphs[findParagraph(paragraphs, text: a.options["paragraph"], index: a.ints["paragraph-index"])]
         if targetParagraph?["paragraph_id"] == nil { fail("bad_target", "That paragraph has no identity to link to.") }
     }
     let after = a.afterParagraph(note)
@@ -329,9 +264,8 @@ func cmdLink(_ a: Args) {
 }
 
 func cmdAddTable(_ a: Args) {
-    let note = Store.note(a.need(0, "note"))
-    guard let source = a.options["tsv"] else { fail("usage", "Pass --tsv <file>, or --tsv - to read stdin. Rows are lines, cells are tab-separated.") }
-    let tsv = (readInput(source) ?? "").trimmingCharacters(in: .newlines)
+    let note = Store.note(a.positional[0])
+    let tsv = (readInput(a.options["tsv"]) ?? "").trimmingCharacters(in: .newlines)
     if tsv.isEmpty { fail("bad_table", "The table is empty.") }
     let rows = tsv.components(separatedBy: "\n").map { $0.components(separatedBy: "\t") }
     let after = a.afterParagraph(note)
@@ -341,8 +275,8 @@ func cmdAddTable(_ a: Args) {
 }
 
 func cmdAttach(_ a: Args) {
-    let note = Store.note(a.need(0, "note"))
-    let path = a.need(1, "file")
+    let note = Store.note(a.positional[0])
+    let path = a.positional[1]
     if !FileManager.default.isReadableFile(atPath: (path as NSString).expandingTildeInPath) { fail("file_not_found", "Cannot read \(path).") }
     let after = a.afterParagraph(note)
     writeNote(a, note, plan: ["action": "attach", "file": path, "note": noteSummary(note)], reason: "inknotes attach") {
@@ -351,8 +285,8 @@ func cmdAttach(_ a: Args) {
 }
 
 func cmdAddURL(_ a: Args) {
-    let note = Store.note(a.need(0, "note"))
-    let url = a.need(1, "URL")
+    let note = Store.note(a.positional[0])
+    let url = a.positional[1]
     if (URL(string: url)?.scheme ?? "").isEmpty { fail("bad_url", "Not a URL: \(url)") }
     let after = a.afterParagraph(note)
     writeNote(a, note, plan: ["action": "add-url", "url": url, "note": noteSummary(note)], reason: "inknotes add-url") {
@@ -361,18 +295,19 @@ func cmdAddURL(_ a: Args) {
 }
 
 func cmdDraw(_ a: Args) {
-    let note = Store.note(a.need(0, "note"))
-    guard let svg = a.options["svg"] else { fail("usage", "Pass --svg <file>.") }
+    let note = Store.note(a.positional[0])
+    let svg = a.options["svg"]!
+    let width = a.width ?? 400
     let options = ["width": a.options["width"] ?? "400", "ink": a.options["ink"] ?? "pen", "color": a.options["color"] ?? ""]
     let stats: [String: Any]
-    switch drawingFromSVG(path: (svg as NSString).expandingTildeInPath, width: Double(options["width"]!) ?? 0, color: options["color"], ink: options["ink"]!) {
+    switch drawingFromSVG(path: (svg as NSString).expandingTildeInPath, width: width, color: options["color"], ink: options["ink"]!) {
     case .success(let (_, s)): stats = s
     case .failure(let error): fail("bad_svg", error.message)
     }
     let after = a.afterParagraph(note)
     let plan: [String: Any] = ["action": "draw", "svg": svg, "drawing": stats, "options": options, "note": noteSummary(note)]
     writeNote(a, note, plan: plan, reason: "inknotes draw") {
-        let object = makeDrawing(note, svg: svg, options: options)
+        let object = makeDrawing(note, svg: svg, width: width, color: options["color"], ink: options["ink"]!)
         let attachment = object.attribute(Key.attachment, at: 0, effectiveRange: nil) as AnyObject
         // The paper helper may place the attachment in the text itself.
         if !textHasAttachment(note, view(attachment, as: ICTTAttachment.self).attachmentIdentifier() ?? "") {
@@ -382,7 +317,7 @@ func cmdDraw(_ a: Args) {
 }
 
 func cmdPin(_ a: Args) {
-    let note = Store.note(a.need(0, "note"))
+    let note = Store.note(a.positional[0])
     let pin = a.options["undo"] == nil
     Store.guardWritable(note)
     let plan: [String: Any] = ["action": pin ? "pin" : "unpin", "note": noteSummary(note)]
@@ -397,7 +332,7 @@ func cmdPin(_ a: Args) {
 }
 
 func cmdCreateFolder(_ a: Args) {
-    let title = a.need(0, "folder name")
+    let title = a.positional[0]
     if title.contains("/") { fail("bad_name", "Folder names cannot contain \"/\"; use --parent for subfolders.") }
     let parent = a.options["parent"].map { Store.folder($0, account: a.options["account"]) }
     let account = parent.map { kv($0, "account") as AnyObject } ?? Store.account(named: a.options["account"] ?? "On My Mac")
@@ -441,9 +376,8 @@ func cmdCreate(_ a: Args) {
 }
 
 func cmdAppend(_ a: Args) {
-    let note = Store.note(a.need(0, "note"))
-    guard let markdown = readInput(a.options["markdown"]) else { fail("usage", "Pass --markdown <file>, or --markdown - to read stdin.") }
-    let blocks = parseMarkdown(markdown)
+    let note = Store.note(a.positional[0])
+    let blocks = parseMarkdown(readInput(a.options["markdown"]) ?? "")
     if blocks.isEmpty { fail("usage", "The Markdown is empty.") }
     let account = kv(note, "account") as AnyObject
     let after = a.afterParagraph(note)
@@ -453,62 +387,22 @@ func cmdAppend(_ a: Args) {
 
 // MARK: - Main
 
-let help = """
-inknotes: read and edit Apple Notes natively.
-Every command prints JSON. Write commands are dry runs unless --apply is given.
-Writes only touch notes in INKNOTES_WRITABLE_ACCOUNTS (comma-separated, default "On My Mac").
-<note> is a note id (UUID), an x-coredata:// URI, or a numeric primary key. <item> is a paragraph's text.
-Placement: --after <item> or --index N puts new content after that paragraph; otherwise at the end.
-
-Read
-  find [text] [--folder PATH|ID] [--account A] [--tag T] [--pinned 1] [--limit N]
-  search <query> [--folder PATH|ID] [--account A] [--limit N]   full-text search over note bodies
-  read <note> [--format json|markdown]
-  backlinks <note>                       notes that link to this note or its paragraphs
-  folders [--account A]                  folders and subfolders with paths and note counts
-  tags [--account A]                     tags with the number of notes using each
-
-Write
-  create [title] [--folder PATH|ID] [--account A] [--markdown FILE|-]   new note from Markdown
-  append <note> --markdown FILE|-        add Markdown content
-  create-folder <name> [--parent PATH|ID] [--account A]
-  pin <note> [--undo]
-  set-style <note> <item> <title|heading|subheading|body|monospaced|bullet|dash|numbered|checklist> [--index N] [--indent N]
-  format <note> <item> [--index N] [--text SUBSTRING] [--bold] [--italic] [--underline] [--strike]
-         [--highlight purple|pink|orange|mint|blue|none] [--link URL] [--plain]
-  check <note> <item> [--index N] [--undo]
-  add-todo <note> <text>
-  add-tag <note> <tag>
-  link <note> <target note> [--paragraph <target item> | --paragraph-index N]
-  add-table <note> --tsv FILE|-
-  add-url <note> <url>                   a link card
-  attach <note> <file>                   an image, PDF or other file
-  draw <note> --svg FILE [--width PT] [--ink pen|pencil|marker] [--color #rrggbb]   a native, editable drawing
-
-Markdown: # ## ### headings, paragraphs, - lists, 1. lists, - [ ] / - [x] to-dos, > quotes, ``` code,
-**bold** *italic* ~~strike~~ ==highlight== =={pink}highlight== [text](url), #tags, [[Note title]] and [[Note title#Paragraph]] links,
-| tables |, --- dividers, ![](file) attachments, ![](drawing.svg) drawings, and a URL alone on a line as a link card.
-
-Needs Full Disk Access for the process that runs it. Built against macOS 27.2.
-
-"""
-
-let reads: [String: (Args) -> Void] = ["find": cmdFind, "search": cmdSearch, "read": cmdRead, "backlinks": cmdBacklinks, "folders": cmdFolders, "tags": cmdTags]
-let writes: [String: (Args) -> Void] = [
+let handlers: [String: (Args) -> Void] = [
+    "find": cmdFind, "search": cmdSearch, "read": cmdRead, "backlinks": cmdBacklinks, "folders": cmdFolders, "tags": cmdTags,
     "check": cmdCheck, "set-style": cmdSetStyle, "format": cmdFormat, "add-todo": cmdAddTodo, "add-tag": cmdAddTag,
     "link": cmdLink, "add-table": cmdAddTable, "attach": cmdAttach, "add-url": cmdAddURL, "draw": cmdDraw,
     "pin": cmdPin, "create-folder": cmdCreateFolder, "create": cmdCreate, "append": cmdAppend,
 ]
 
 let args = Args(Array(CommandLine.arguments.dropFirst()))
-switch args.command {
-case nil, "help", "--help":
+if args.helpRequested {
+    let help = args.command.map { CommandSpec.named($0).help } ?? CommandSpec.rootHelp
     FileHandle.standardOutput.write(Data(help.utf8))
-case "version":
+} else if args.command == "version" {
     emit(["version": version])
-case let command?:
-    guard let run = reads[command] ?? writes[command] else { fail("usage", "Unknown command \"\(command)\". Run `inknotes help`.") }
-    // Reads and dry runs open the store read-only.
-    Store.open(writable: writes[command] != nil && args.apply)
+} else {
+    guard let command = args.command, let run = handlers[command] else { fatalError("Every command needs a handler.") }
+    // Reads and dry runs open read-only.
+    Store.open(writable: CommandSpec.named(command).writes && args.apply)
     Store.moc.performAndWait { run(args) }
 }

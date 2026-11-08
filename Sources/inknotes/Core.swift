@@ -58,10 +58,37 @@ func emit(_ object: Any) {
     FileHandle.standardOutput.write(data + Data("\n".utf8))
 }
 
-/// Prints {"error": code, "message": message} to stderr, on one line with
-/// "error" first, and exits with status 1.
+/// One registry for exit codes and recovery semantics. Retrying is never
+/// automatic: even an operational write failure may have partially saved.
+enum FailureKind {
+    case input, actionRequired, operational
+
+    static func classify(_ code: String) -> FailureKind {
+        switch code {
+        case "usage", "bad_index", "bad_style", "bad_highlight", "bad_url",
+             "bad_text", "bad_tag", "bad_target", "bad_table", "bad_svg",
+             "bad_name", "bad_parent", "bad_folder", "file_not_found",
+             "ambiguous_note", "ambiguous_folder", "ambiguous_paragraph":
+            return .input
+        case "no_access", "account_not_writable", "note_locked", "note_deleted",
+             // Not found and conflict: the input was well formed, but the store disagrees.
+             "note_not_found", "folder_not_found", "account_not_found",
+             "paragraph_not_found", "text_not_found", "folder_exists", "not_a_todo":
+            return .actionRequired
+        default:
+            return .operational
+        }
+    }
+
+    var exitCode: Int32 { self == .input ? 2 : 1 }
+    var status: String { self == .operational ? "error" : "action_required" }
+}
+
+/// Prints a single-line JSON error to stderr, with "error" first.
 func fail(_ code: String, _ message: String) -> Never {
-    let data = try! JSONSerialization.data(withJSONObject: ["error": code, "message": message], options: [.sortedKeys])
+    let kind = FailureKind.classify(code)
+    let data = try! JSONSerialization.data(withJSONObject: ["error": code, "message": message,
+                                                           "status": kind.status, "retryable": false], options: [.sortedKeys])
     FileHandle.standardError.write(data + Data("\n".utf8))
-    exit(1)
+    exit(kind.exitCode)
 }

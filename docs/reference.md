@@ -4,10 +4,43 @@ Every command, option and output format. For setup, see the [README](../README.m
 
 ## How it behaves
 
-- Every command prints JSON to stdout. Errors print `{"error": code, "message": …}` to stderr with exit code 1. `read --format markdown` prints Markdown instead.
+- Results, including `version` and `--version`, print JSON to stdout; `read --format markdown` prints Markdown and help prints text. Errors print one sorted JSON line `{"error": code, "message": …, "retryable": false, "status": "action_required"|"error"}` to stderr. Exit codes: **0** success, **2** usage errors or missing input, **1** operational failures, including a note, folder or paragraph that isn't found.
 - Write commands are **dry runs** unless `--apply` is passed. A dry run validates everything (paragraphs, link targets, files, SVGs), prints the plan, and opens the database read-only.
 - Writes only touch accounts listed in `INKNOTES_WRITABLE_ACCOUNTS` (comma-separated). The default is `On My Mac`. iCloud is supported and opt-in: set the variable to `iCloud` (or `On My Mac,iCloud`) to write to it. Notes.app does the upload, usually within 15–90 seconds, though one edit once took several minutes.
 - Renamed from `nnote` in 0.4.0: the binary is `inknotes` and the environment variables start with `INKNOTES_`.
+
+## Help and parsing
+
+`inknotes`, `inknotes --help`, `inknotes -h` and `inknotes help` show root help.
+`inknotes <command> --help`, `inknotes <command> -h` and `inknotes help <command>`
+show that command's usage, summary, options and example. Help and `--version`
+work before any store access; help takes precedence over other validation.
+`inknotes version` and `inknotes --version` both return `{"version": "0.4.0"}`.
+
+Each command rejects unknown options and extra positional arguments before opening
+Notes. Value options accept `--name value` and `--name=value`; repeated options
+use the last value. `--` ends option parsing, so `inknotes find -- --help` searches
+for the literal title text `--help`. Text that starts with `-` needs it too:
+`inknotes add-todo <note> -- '- item'`. An option value that starts with `--` needs
+the `=` form: `--after=--item`. Switches such as `--apply` take no value.
+`find --pinned`, `--pinned 1` and `--pinned=1` select pinned notes.
+
+`--limit` must be a positive integer (default 20); `--indent`, `--index` and
+`--paragraph-index` must be non-negative integers. `--width` must be finite and
+greater than zero (default 400 points). `--format` accepts only `json` or `markdown`.
+Invalid values fail with exit 2 instead of silently choosing a default.
+
+Input errors, including unreadable input files and ambiguous references
+(`file_not_found`, `ambiguous_*`), exit 2 with `status: "action_required"`.
+Arguments are checked before the store opens, so a bad argument is reported ahead of a
+missing note. Things the store rules out exit 1 with `status: "action_required"`:
+access restrictions (`no_access`, `account_not_writable`, `note_locked`, `note_deleted`),
+not found (`note_not_found`, `folder_not_found`, `account_not_found`,
+`paragraph_not_found`, `text_not_found`) and conflicts (`folder_exists`, `not_a_todo`).
+Framework, fetch, save and object-creation failures exit 1 with `status: "error"`.
+`retryable` is always false: no error promises that replaying a write is safe.
+Existing `error` codes and the `error` and `message` keys are stable; match on the
+code, because `message` wording can change.
 
 ## Examples
 
@@ -102,7 +135,7 @@ inknotes draw "$NOTE" --svg architecture.svg --width 360 --ink marker --color '#
 
 | Command | Output |
 |---|---|
-| `find [text] [--folder F] [--account A] [--tag T] [--pinned 1] [--limit N]` | Notes whose title contains `text`, newest first (default limit 20) |
+| `find [text] [--folder F] [--account A] [--tag T] [--pinned [1]] [--limit N]` | Notes whose title contains `text`, newest first (default limit 20) |
 | `search <text> [--folder F] [--account A] [--limit N]` | Notes whose body contains `text`, each with id, title, folder, account, modified date and a snippet of the first match with up to 80 characters on each side (default limit 20) |
 | `read <note> [--format json\|markdown]` | Paragraphs with style, indent, quote level, to-do state, inline formatting, tags, links, tables and attachments |
 | `backlinks <note>` | Notes that link to this note or to one of its paragraphs: where each link sits, and which paragraph it targets |
@@ -174,6 +207,7 @@ Blank lines become one empty paragraph.
 }
 ```
 
+- `search` returns `notes` and `count`, plus `truncated` (another readable matching note exists beyond `--limit`) and `skipped` (selected notes whose body could not be read). It scans all selected bodies to report these accurately; `count: 0` with `skipped > 0` is incomplete coverage, not proof of no matches. `find` retains its `total` field.
 - Attachment `type`: `tag`, `link`, `table`, `url` (link card), `file`, `drawing`, `dividerline`, or another inline type. Each also has `id` and `uti`.
 - `paragraph_id` is the paragraph's identity, which paragraph links point to.
 - Write results: `{"dry_run": true, "plan": …}`; `{"changed": true, "plan": …, "note": …}`; `{"changed": false, "reason": …}` when nothing needed changing.

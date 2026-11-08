@@ -46,7 +46,9 @@ These rendering checks were done by hand in Notes.app. Regressions in what `inkn
 
 | Path | Module | Interface |
 |---|---|---|
-| `Sources/inknotes/main.swift` | CLI | Commands, arguments, help |
+| `Sources/inknotes/main.swift` | CLI | Command implementations and dispatch |
+| `Sources/inknotes/CLI.swift` | CLI metadata | Command and option definitions, argument validation and help, without store access |
+| `Sources/inknotes/Search.swift` | Search | Matching, snippets, truncation and skipped-body reporting |
 | `Sources/inknotes/NotesShared.swift` | The private API | Every NotesShared method inknotes calls, declared as an `@objc protocol` with its exact selector. Objects are viewed through these protocols, so each message send is type-checked |
 | `Sources/inknotes/Store.swift` | The Notes store | Open (read-only or writable), look up notes, folders and accounts, write guards, `commit` (one edit, saved the way Notes saves it). The seam to Notes: your store, or a test container |
 | `Sources/inknotes/Document.swift` | A note's text | Paragraph JSON, finding a paragraph, inserting paragraphs, paragraph styles |
@@ -54,7 +56,7 @@ These rendering checks were done by hand in Notes.app. Regressions in what `inkn
 | `Sources/inknotes/Markdown.swift` | Markdown | Parse, plan (dry run), render into a note, export |
 | `Sources/inknotes/SVG.swift` | SVG | SVG file → PencilKit drawing |
 | `Sources/inknotes/Core.swift` | Shared | Attribute keys, style and highlight names, JSON output and errors |
-| `tests/` | e2e tests | Every command through the CLI |
+| `tests/` | Tests | CLI contracts without store access, plus every command through the container |
 | `scripts/backup-notestore.sh` | | Backs up the real store before any manual test against it |
 
 ## Tests
@@ -66,9 +68,9 @@ uv run pytest
 - The suite builds `build/inknotes` and runs every command through its JSON interface: all writes, their dry runs, and their error codes. Set `INKNOTES_BIN` to test another binary.
 - It runs against a fresh store in the test container `inknotes-e2e`, which it deletes before and after the run (`INKNOTES_E2E_KEEP=1` keeps it).
 - It refuses to start if that store isn't empty. At the end, it checks that your real store has the same objects and note bodies as before.
-- It needs Full Disk Access ([how to grant it](../README.md#get-started)); without it, it stops with a message.
-- Every change should keep `uv run pytest` green. A new command or option needs a test in `tests/e2e_test.py`.
-- The tests only talk to the CLI, so they don't depend on the implementation language. Version 0.3.0 rewrote inknotes from Objective-C into Swift; the same 23 tests passed unchanged before and after.
+- It needs Full Disk Access ([how to grant it](../README.md#get-started)); without it, the full run stops with a message. Run `uv run pytest tests/cli_test.py` for the help, parsing, error and search tests, which need no store access.
+- Every change should keep `uv run pytest` green. A new command or option needs a test in `tests/e2e_test.py` or `tests/cli_test.py`.
+- The tests only talk to the CLI, so they don't depend on the implementation language. Version 0.3.0 rewrote inknotes from Objective-C into Swift; the same 23 tests passed unchanged before and after. The store-free tests also compile a small Swift harness to cover parser values, error classification and unreadable search bodies.
 
 ## Calling a private method
 
