@@ -5,29 +5,25 @@ description: Manage the user's Apple Notes knowledge base (AI context, knowledge
 
 # Apple Notes knowledge base
 
-Apple Notes is the user's personal knowledge base: AI context, knowledge management, and task management. Operate it with `inknotes` (`~/.local/bin/inknotes`; source and full reference in `~/GitHub/inknotes/README.md`). It reads and writes Notes through Notes' own framework, so checklists, `#tags`, links, tables and formatting are real Notes objects, not imitations.
+Apple Notes is the user's personal knowledge base: AI context, knowledge management, and task management. Operate it with `inknotes` (full reference: https://github.com/nickhuo/inknotes/blob/main/docs/reference.md). It reads and writes Notes through Notes' own framework, so checklists, `#tags`, links, tables and formatting are real Notes objects, not imitations.
 
 ## Before you start
 
-- **Install.** If `inknotes` is not on the PATH, download the latest release (private repo; needs `gh` signed in with access):
+- **Install.** If `inknotes` is not on the PATH, check `~/.local/bin/inknotes`. If it isn't there either, download the latest release (no GitHub account or `gh` needed):
   ```bash
-  mkdir -p ~/.local/bin && gh release download --repo nickhuo/inknotes --pattern inknotes --output ~/.local/bin/inknotes --clobber && chmod +x ~/.local/bin/inknotes
+  mkdir -p ~/.local/bin && curl -fsSL https://github.com/nickhuo/inknotes/releases/latest/download/inknotes -o ~/.local/bin/inknotes && chmod +x ~/.local/bin/inknotes
   ```
-  Run the same command to update.
-- **Full Disk Access.** inknotes needs it. In Claude's desktop app only the Terminal panel has it: run inknotes through the Terminal panel (`run_in_terminal`), not the Bash tool. Store commands may fail with `no_access`; help, version and argument validation need no store access.
+  Run the same command to update. If `~/.local/bin` is not on the PATH, call it by its full path.
+- **Full Disk Access.** The process that runs inknotes needs it. Without it, commands fail with `no_access`. Version 0.4.0 instead returns empty results with exit 0, so on 0.4.0 (`inknotes version`) don't tell the user they have no notes until you've ruled this out. Ask them to add the app that runs you under System Settings → Privacy & Security → Full Disk Access and restart it, or to run inknotes from a terminal that has access. Your host may run commands in a process without this access even after that. Help, version and argument validation need no store access.
 - **Output.** Results and `version`/`--version` print JSON on stdout; help is text and `read --format markdown` prints Markdown. Errors print one sorted JSON line `{"error": code, "message": …, "retryable": false, "status": "action_required"|"error"}` on stderr. Exit 0 means success, 2 means usage or missing input (including an unreadable input file or an ambiguous reference), and 1 means an operational failure. Access restrictions, not-found errors (`note_not_found` and similar) and conflicts (`folder_exists`, `not_a_todo`) use `action_required` with exit 1; other operational failures use `error`. Do not automatically retry writes.
 - **Dry run first.** Write commands only plan unless you pass `--apply`. Run once without it, check the `plan`, then run again with `--apply` and check the returned `note`.
-- **Accounts.** Writes are limited to the accounts in `INKNOTES_WRITABLE_ACCOUNTS` (default `On My Mac`). The knowledge base is in **iCloud**, so prefix writes to it with `INKNOTES_WRITABLE_ACCOUNTS=iCloud`. Reads need nothing.
-- **Sync.** Changes appear in Notes.app on this Mac at once. Notes.app uploads them to iCloud, usually within 15–90 seconds; don't promise the user their phone has a change the moment you make it.
-
-## Help and arguments
-
-Use `inknotes --help` or `-h` for root help, and `inknotes <command> --help` or `inknotes help <command>` for usage, options and an example. These never open Notes. Unknown options and extra positional arguments fail before opening the store. Value options accept `--name=value` or `--name value`; repeated options use the last value. `--` ends option parsing for literal text starting with `-`; an option value starting with `--` needs the `=` form (`--after=--item`). `--limit` is a positive integer; `--indent` and paragraph indexes are non-negative integers; `--width` is finite and positive; `--format` is `json` or `markdown`. Invalid values exit 2.
+- **Accounts.** Writes are limited to the accounts in `INKNOTES_WRITABLE_ACCOUNTS` (default `On My Mac`). iCloud is supported and opt-in: write to it only when the user asks you to or has already set the variable, and if a write fails with `account_not_writable`, ask before adding iCloud. Reads need nothing.
+- **Sync.** Changes appear in Notes.app on this Mac at once. Notes.app uploads iCloud changes itself, usually within 15–90 seconds and once after several minutes; don't promise the user their phone has a change the moment you make it.
 
 ## Finding and reading
 
 ```bash
-inknotes find "words in the title" [--folder "A/B"] [--account iCloud] [--tag topic] [--pinned [1]] [--limit N]
+inknotes find "words in the title" [--folder "A/B"] [--account iCloud] [--tag topic] [--pinned 1] [--limit N]
 inknotes search "words in the body" [--folder "A/B"] [--account iCloud] [--limit N]
 inknotes read <id>                    # JSON: paragraphs with style, to-do state, tags, links, tables, formatting
 inknotes read <id> --format markdown  # the note as Markdown
@@ -36,30 +32,35 @@ inknotes folders [--account iCloud]   # folder paths, ids, note counts
 inknotes tags [--account iCloud]      # tags and how many notes use each
 ```
 
-`find` matches titles only. `search` does full-text grep over note bodies and returns a `snippet` of matching context alongside each result. It also reports `truncated` when readable matches were omitted by the limit, and `skipped` for selected notes whose bodies could not be read. A zero count with skipped bodies is incomplete coverage. Bare `--pinned` and legacy `--pinned 1` both work. `<id>` is the `id` from `find` or `search` (a UUID). To open a note directly in Notes.app, use the deeplink `notes://showNote?identifier=<id>`. A paragraph is named by its exact displayed `text` from `read`; when several paragraphs read the same, pass `--index N` instead of the text. With `--index`, `set-style` takes the style as `--style heading`, since there is no text argument before it.
+`find` matches titles only. `search` does full-text grep over note bodies and returns a `snippet` of matching context alongside each result. `<id>` is the `id` from `find` or `search` (a UUID). To open a note directly in Notes.app, use the deeplink `notes://showNote?identifier=<id>`. A paragraph is named by its exact displayed `text` from `read`; when several paragraphs read the same, pass `--index N` instead of the text. With `--index`, `set-style` takes the style as `--style heading`, since there is no text argument before it.
 
 ## Writing
 
 ```bash
-W="INKNOTES_WRITABLE_ACCOUNTS=iCloud"   # for notes in iCloud
-
-env $W inknotes create "Title" --folder "Folder/Sub" --account iCloud --markdown note.md --apply
-env $W inknotes append <id> --markdown - [--after "<paragraph text>"] --apply   # Markdown on stdin
-env $W inknotes check <id> "<to-do text>" [--undo] --apply
-env $W inknotes add-todo <id> "text" [--after "<paragraph text>"] --apply
-env $W inknotes add-tag <id> topic --apply
-env $W inknotes link <id> <target-id> [--paragraph "<target paragraph text>"] --apply
-env $W inknotes set-style <id> "<paragraph text>" heading --apply
-env $W inknotes format <id> "<paragraph text>" [--text "part"] --bold|--italic|--highlight pink|--link URL --apply
-env $W inknotes pin <id> [--undo] --apply
-env $W inknotes create-folder "Name" --parent "Folder" --account iCloud --apply
-env $W inknotes add-table <id> --tsv - --apply      # rows on lines, cells tab-separated
-env $W inknotes add-url <id> https://… --apply      # link card
-env $W inknotes attach <id> /path/file.pdf --apply
-env $W inknotes draw <id> --svg diagram.svg [--width 400] --apply   # native, editable drawing
+inknotes create "Title" --folder "Folder/Sub" --markdown note.md --apply
+inknotes append <id> --markdown - [--after "<paragraph text>"] --apply   # Markdown on stdin
+inknotes check <id> "<to-do text>" [--undo] --apply
+inknotes add-todo <id> "text" [--after "<paragraph text>"] --apply
+inknotes add-tag <id> topic --apply
+inknotes link <id> <target-id> [--paragraph "<target paragraph text>"] --apply
+inknotes set-style <id> "<paragraph text>" heading --apply
+inknotes format <id> "<paragraph text>" [--text "part"] --bold|--italic|--highlight pink|--link URL --apply
+inknotes pin <id> [--undo] --apply
+inknotes create-folder "Name" --parent "Folder" --apply
+inknotes add-table <id> --tsv - --apply      # rows on lines, cells tab-separated
+inknotes add-url <id> https://… --apply      # link card
+inknotes attach <id> /path/file.pdf --apply
+inknotes draw <id> --svg diagram.svg [--width 400] --apply   # native, editable drawing
 ```
 
 Prefer `create`/`append` with Markdown for anything longer than a line: one save, every object native.
+
+These write to `On My Mac`. When the user asks you to write to iCloud, prefix that command with the variable, and add `--account iCloud` to `create` and `create-folder`:
+
+```bash
+INKNOTES_WRITABLE_ACCOUNTS=iCloud inknotes create "Title" --account iCloud --markdown note.md --apply
+INKNOTES_WRITABLE_ACCOUNTS=iCloud inknotes check <id> "<to-do text>" --apply
+```
 
 ### Markdown it understands
 
