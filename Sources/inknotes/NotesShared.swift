@@ -112,6 +112,10 @@ func objects(_ collection: Any?) -> [AnyObject] {
     @objc(setIsPinned:) func setIsPinned(_ pinned: Bool)
     @objc(isPasswordProtected) func isPasswordProtected() -> Bool
     @objc(mergeableString) func mergeableString() -> AnyObject?
+    // Plain-text representation; faster than loading the full NSAttributedString.
+    // Available on 27.2; check with responds() before calling.
+    @objc(noteAsPlainText) func noteAsPlainText() -> String?
+    @objc(noteAsPlainTextWithoutTitle) func noteAsPlainTextWithoutTitle() -> String?
     @objc(beginEditing) func beginEditing()
     @objc(endEditing) func endEditing()
     @objc(didChangeNoteText) func didChangeNoteText()
