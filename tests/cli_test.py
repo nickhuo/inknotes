@@ -171,6 +171,11 @@ def test_option_value_that_looks_like_an_option_names_the_equals_form(cli, args)
     assert f"write {option}={value}" in error(cli(*args))["message"]
 
 
+def test_double_dash_after_a_value_option_is_not_offered_as_its_value(cli):
+    message = error(cli("find", "--limit", "--"))["message"]
+    assert message.startswith("--limit needs a value. ")
+
+
 def test_option_value_with_leading_dashes_parses_with_equals(harness):
     doc = json.loads(harness("parse", "add-todo", "n", "x", "--after=--prev").stdout)
     assert doc["options"] == {"after": "--prev"}

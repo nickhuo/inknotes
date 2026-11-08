@@ -290,7 +290,7 @@ struct Args {
                 } else if let inline {
                     value = inline
                 } else {
-                    guard i + 1 < argv.count else { fail("usage", "--\(option.name) needs a value.\(hint)") }
+                    guard i + 1 < argv.count, argv[i + 1] != "--" else { fail("usage", "--\(option.name) needs a value.\(hint)") }
                     if argv[i + 1].hasPrefix("--") {
                         fail("usage", "--\(option.name) needs a value; got the option \(argv[i + 1]). If that is the value, write --\(option.name)=\(argv[i + 1]).\(hint)")
                     }
