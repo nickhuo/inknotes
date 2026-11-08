@@ -66,8 +66,7 @@ private func inlineMarkdown(_ text: NSAttributedString, _ range: NSRange) -> Str
     return out
 }
 
-func noteMarkdown(_ note: AnyObject) -> String {
-    let text = bodyText(note)
+func markdown(_ text: NSAttributedString) -> String {
     let ns = text.string as NSString
     var md = ""
     var inCode = false

@@ -73,7 +73,7 @@ enum FailureKind {
         case "no_access", "account_not_writable", "note_locked", "note_deleted",
              // Not found and conflict: the input was well formed, but the store disagrees.
              "note_not_found", "folder_not_found", "account_not_found",
-             "paragraph_not_found", "text_not_found", "folder_exists", "not_a_todo":
+             "paragraph_not_found", "text_not_found", "snapshot_not_found", "folder_exists", "not_a_todo":
             return .actionRequired
         default:
             return .operational
