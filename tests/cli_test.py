@@ -10,13 +10,13 @@ from conftest import ROOT
 
 
 COMMANDS = {
-    "find": 1, "search": 1, "read": 1, "backlinks": 1, "folders": 0, "tags": 0,
-    "create": 1, "append": 1, "create-folder": 1, "pin": 1, "set-style": 3,
+    "find": 1, "search": 1, "read": 1, "backlinks": 1, "folders": 0, "tags": 0, "history": 1,
+    "edit": 2, "restore": 2, "create": 1, "append": 1, "create-folder": 1, "pin": 1, "set-style": 3,
     "format": 2, "check": 2, "add-todo": 2, "add-tag": 2, "link": 2,
     "add-table": 1, "add-url": 2, "attach": 2, "help": 1, "version": 0,
 }
 WRITES = {
-    "create", "append", "create-folder", "pin", "set-style", "format", "check",
+    "edit", "restore", "create", "append", "create-folder", "pin", "set-style", "format", "check",
     "add-todo", "add-tag", "link", "add-table", "add-url", "attach",
 }
 
@@ -127,7 +127,7 @@ def test_double_dash_keeps_options_literal(cli, args):
     assert "Unexpected argument" in error(cli(*args))["message"]
 
 
-@pytest.mark.parametrize("command", ["create", "append"])
+@pytest.mark.parametrize("command", ["create", "append", "edit"])
 def test_markdown_syntax_on_write_help(cli, command):
     page = cli(command, "--help").stdout
     for syntax in ["# ## ### headings", "- [ ] / - [x] to-dos", "==highlight==", "[[Note title]]",
