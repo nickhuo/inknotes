@@ -50,10 +50,8 @@ main() {
 
     [ "$(uname -s)" = Darwin ] || die 'inknotes requires macOS.'
     [ "$(uname -m)" = arm64 ] || die 'inknotes requires Apple silicon (an arm64 terminal).'
-    case "$(sw_vers -productVersion)" in
-        27.2|27.2.*) ;;
-        *) die 'This installer supports macOS 27.2; other versions have not been validated.' ;;
-    esac
+    sw_vers -productVersion | awk -F. '{ exit !($1 > 27 || ($1 == 27 && $2 >= 2)) }' \
+        || die 'inknotes requires macOS 27.2 or later.'
     for tool in curl node npx shasum; do
         command -v "$tool" >/dev/null 2>&1 || die "Missing $tool. Install Node.js 22.20 or later for node/npx, then rerun."
     done
