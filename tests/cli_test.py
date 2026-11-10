@@ -78,7 +78,7 @@ def test_discovery_skips_other_validation(cli):
 def test_version(cli, args):
     p = cli(*args)
     assert p.returncode == 0 and p.stderr == ""
-    assert json.loads(p.stdout) == {"version": "0.5.0"}
+    assert json.loads(p.stdout) == {"version": "0.6.0"}
 
 
 @pytest.mark.parametrize("command", COMMANDS)

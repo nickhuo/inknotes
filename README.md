@@ -53,7 +53,7 @@ Without this access, commands fail with `no_access`. Version 0.4.0 instead repor
 
 > Which notes link to my Roadmap note?
 
-Three safeguards apply while you try it: every write is a dry run until `--apply` is passed, writes go only to the **On My Mac** account until you allow iCloud, and inknotes has no command that deletes anything.
+Four safeguards apply while you try it: every write is a dry run until `--apply` is passed, writes go only to the **On My Mac** account until you allow iCloud, inknotes has no command that deletes anything, and every applied change to a note's text first saves a snapshot that `inknotes restore` can put back.
 
 ### Using iCloud
 
@@ -74,7 +74,12 @@ inknotes backlinks "$NOTE"                        # notes that link here
 inknotes create --folder Projects --markdown review.md --apply   # a note from Markdown: to-dos, tags, [[links]], tables
 inknotes check "$NOTE" "Publish the skill" --apply              # tick a to-do
 inknotes link "$NOTE" "$ROADMAP" --paragraph "Q4 goals" --apply # link to one paragraph of another note
+inknotes edit "$NOTE" "Old intro" --markdown intro.md --apply   # replace a paragraph with Markdown
+inknotes history "$NOTE"                                        # the note's last five snapshots
+inknotes restore "$NOTE" --apply                                # undo the last change
 ```
+
+Since 0.6.0, `create` takes the title from the Markdown's first line (`# Title`), and `create "Title"` and `--title` are gone. Run `inknotes help <command>` for every option.
 
 Not supported yet: deleting or moving notes, editing table cells, text color, and locked notes.
 
