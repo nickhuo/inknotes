@@ -11,7 +11,7 @@ from conftest import ROOT
 
 COMMANDS = {
     "find": 1, "search": 1, "read": 1, "backlinks": 1, "folders": 0, "tags": 0, "history": 1,
-    "edit": 2, "restore": 2, "create": 1, "append": 1, "create-folder": 1, "pin": 1, "set-style": 3,
+    "edit": 2, "restore": 2, "create": 0, "append": 1, "create-folder": 1, "pin": 1, "set-style": 3,
     "format": 2, "check": 2, "add-todo": 2, "add-tag": 2, "link": 2,
     "add-table": 1, "add-url": 2, "attach": 2, "help": 1, "version": 0,
 }

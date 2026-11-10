@@ -1,3 +1,4 @@
+# Think Different
 ## Here's to the crazy ones
 
 1. The misfits.

@@ -340,10 +340,8 @@ func cmdCreate(_ a: Args) {
     let account = kv(folder, "account") as AnyObject
     Store.guardAccount(account)
     if isTrash(folder) { fail("bad_folder", "Cannot create a note in Recently Deleted.") }
-    var markdown = readInput(a.options["markdown"]) ?? ""
-    if let title = a.options["title"] ?? a.positional(0) { markdown = "# \(title)\n\(markdown)" }
-    let blocks = parseMarkdown(markdown)
-    if blocks.isEmpty { fail("usage", "Give the note a title or --markdown content.") }
+    let blocks = parseMarkdown(readInput(a.options["markdown"]) ?? "")
+    if blocks.isEmpty { fail("usage", "The Markdown is empty.") }
     let plan: [String: Any] = ["action": "create", "folder": folderPath(folder), "account": kv(account, "name") ?? "",
                                "blocks": planBlocks(blocks, account: account)]
     if !a.apply { emit(["dry_run": true, "plan": plan]); return }
