@@ -5,7 +5,7 @@ description: Manage the user's Apple Notes knowledge base (AI context, knowledge
 
 # Apple Notes knowledge base
 
-Apple Notes is the user's personal knowledge base: AI context, knowledge management, and task management. Operate it with `inknotes` (full reference: https://github.com/nickhuo/inknotes/blob/main/docs/reference.md). It reads and writes Notes through Notes' own framework, so checklists, `#tags`, links, tables and formatting are real Notes objects, not imitations.
+Apple Notes is the user's personal knowledge base: AI context, knowledge management, and task management. Operate it with `inknotes` (full reference: `inknotes help` and `inknotes help <command>`). It reads and writes Notes through Notes' own framework, so checklists, `#tags`, links, tables and formatting are real Notes objects, not imitations.
 
 ## Before you start
 
@@ -36,6 +36,7 @@ inknotes tags [--account iCloud]      # tags and how many notes use each
 ```bash
 inknotes create --folder "Folder/Sub" --markdown note.md --apply   # first line, "# Title", is the title
 inknotes append <id> --markdown - [--after "<paragraph text>"] --apply   # Markdown on stdin
+inknotes edit <id> "<paragraph text>" [--count N] --markdown - --apply  # replace N paragraphs (default 1) with Markdown
 inknotes check <id> "<to-do text>" [--undo] --apply
 inknotes add-todo <id> "text" [--after "<paragraph text>"] --apply
 inknotes add-tag <id> topic --apply
@@ -49,7 +50,7 @@ inknotes add-url <id> https://… --apply      # link card
 inknotes attach <id> /path/file.pdf --apply
 ```
 
-Prefer `create`/`append` with Markdown for anything longer than a line: one save, every object native.
+Prefer `create`/`append` with Markdown for anything longer than a line: one save, every object native. To rewrite part of a note, use `edit` rather than appending a corrected copy: it replaces `--count` paragraphs (default 1) starting at the named one, and keeps the first paragraph's identity, so paragraph links to it keep working. `edit` also accepts `--index N` in place of the paragraph text.
 
 These write to `On My Mac`. When the user asks you to write to iCloud, prefix that command with the variable, and add `--account iCloud` to `create` and `create-folder`:
 
@@ -72,6 +73,21 @@ INKNOTES_WRITABLE_ACCOUNTS=iCloud inknotes check <id> "<to-do text>" --apply
 - Use headings for structure; they are real Notes headings.
 - A blank line becomes one empty paragraph. Put one between blocks (paragraph, list, table) and none between items of the same list.
 - No decorative emoji unless the user asks for them or they carry task-critical meaning.
+
+## Undo: history and restore
+
+Every applied write that changes a note's text first saves a snapshot of the note, and the result's `snapshot` field names it. Only the newest five snapshots per note are kept, under `~/.local/state/inknotes/history/<note id>/` on this Mac.
+
+```bash
+inknotes history <id>                 # snapshots, newest first: id, reason, created, title
+inknotes restore <id> --apply         # put back the newest snapshot
+inknotes restore <id> <snapshot-id> --apply
+```
+
+- When the user asks you to undo your last change to a note, `restore` it. Dry-run first: the plan shows the Markdown that will come back and any `missing_attachments`.
+- A restore saves a snapshot first, so running `restore` again undoes the restore.
+- `restore` replaces the note's whole text, so it also drops anything changed in Notes.app since that snapshot. If the dry run's Markdown is missing something the note has now, tell the user before applying.
+- Snapshots cover the note's text (including to-dos, tags and links), not its pin state or folder. Writes made in Notes.app or before 0.6.0 have no snapshots.
 
 ## Links and backlinks: check before you edit or create
 
