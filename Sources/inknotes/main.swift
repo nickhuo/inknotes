@@ -20,8 +20,9 @@ extension Args {
 func writeNote(_ a: Args, _ note: AnyObject, plan: [String: Any], reason: String, _ edit: () -> Void) {
     Store.guardWritable(note)
     if !a.apply { emit(["dry_run": true, "plan": plan]); return }
+    let snapshot = History.save(note, reason: reason)
     Store.commit(note, reason: reason) { _ in edit() }
-    emit(["changed": true, "plan": plan, "note": noteJSON(note)])
+    emit(["changed": true, "plan": plan, "note": noteJSON(note), "snapshot": snapshot])
 }
 
 // MARK: - Read commands
@@ -52,7 +53,7 @@ func cmdFind(_ a: Args) {
 
 func cmdRead(_ a: Args) {
     let note = Store.note(a.positional[0])
-    if a.options["format"] == "markdown" { FileHandle.standardOutput.write(Data(noteMarkdown(note).utf8)) }
+    if a.options["format"] == "markdown" { FileHandle.standardOutput.write(Data(markdown(bodyText(note)).utf8)) }
     else { emit(noteJSON(note)) }
 }
 
@@ -361,11 +362,71 @@ func cmdAppend(_ a: Args) {
     writeNote(a, note, plan: plan, reason: "inknotes append") { insertParagraphs(note, after: after, renderBlocks(blocks, note: note, account: account)) }
 }
 
+func cmdEdit(_ a: Args) {
+    let note = Store.note(a.positional[0])
+    let paragraphs = paragraphsJSON(bodyText(note))
+    let first = findParagraph(paragraphs, text: a.positional(1), index: a.ints["index"])
+    let count = a.ints["count"] ?? 1
+    if first + count > paragraphs.count { fail("bad_index", "--count \(count) from paragraph \(first) runs past the last paragraph (\(paragraphs.count - 1)).") }
+    let blocks = parseMarkdown(readInput(a.options["markdown"]) ?? "")
+    if blocks.isEmpty { fail("usage", "The Markdown is empty.") }
+    let account = kv(note, "account") as AnyObject
+    let plan: [String: Any] = ["action": "edit", "replaces": Array(paragraphs[first..<first + count]),
+                               "blocks": planBlocks(blocks, account: account), "note": noteSummary(note)]
+    writeNote(a, note, plan: plan, reason: "inknotes edit") {
+        let text = bodyText(note)
+        let ranges = paragraphRanges(text)
+        let last = ranges[first + count - 1]
+        let start = ranges[first].enclosing.location
+        let content = NSMutableAttributedString(attributedString: renderBlocks(blocks, note: note, account: account))
+        // Paragraph links to the first replaced paragraph keep working.
+        if let uuid = styleAt(text, ranges[first].range)?.uuid(), let style = content.attribute(Key.style, at: 0, effectiveRange: nil) {
+            view(style as AnyObject, as: ICTTParagraphStyle.self).setUUID(uuid)
+        }
+        // Text follows the replaced paragraphs: the new block must end with a newline too.
+        if NSMaxRange(last.enclosing) > NSMaxRange(last.range) {
+            let style = content.attribute(Key.style, at: content.length - 1, effectiveRange: nil)
+            content.append(NSAttributedString(string: "\n", attributes: style.map { [Key.style: $0] } ?? [:]))
+        }
+        replaceText(note, NSRange(location: start, length: NSMaxRange(last.enclosing) - start), with: content)
+    }
+}
+
+func cmdHistory(_ a: Args) {
+    let note = Store.note(a.positional[0])
+    let snapshots = History.files(note).reversed().map { History.summary(History.load($0)) }
+    emit(["note": noteSummary(note), "snapshots": snapshots, "count": snapshots.count])
+}
+
+func cmdRestore(_ a: Args) {
+    let note = Store.note(a.positional[0])
+    let files = History.files(note)
+    let file: URL
+    if let id = a.positional(1) {
+        guard let match = files.first(where: { $0.deletingPathExtension().lastPathComponent == id }) else {
+            fail("snapshot_not_found", "No snapshot \(id) for this note. Run `inknotes history <note>`.")
+        }
+        file = match
+    } else {
+        guard let latest = files.last else { fail("snapshot_not_found", "This note has no snapshots.") }
+        file = latest
+    }
+    // Loaded before writeNote saves a new snapshot, which may prune this one.
+    let snapshot = History.load(file)
+    var plan: [String: Any] = ["action": "restore", "snapshot": History.summary(snapshot), "markdown": markdown(snapshot.text), "note": noteSummary(note)]
+    // Notes may have purged an attachment since; its character would come back empty.
+    let missing = attachmentObjects(snapshot.text).filter { $0.object == nil }.map(\.id)
+    if !missing.isEmpty { plan["missing_attachments"] = missing }
+    writeNote(a, note, plan: plan, reason: "inknotes restore") {
+        replaceText(note, NSRange(location: 0, length: bodyText(note).length), with: snapshot.text)
+    }
+}
+
 // MARK: - Main
 
 let handlers: [String: (Args) -> Void] = [
     "find": cmdFind, "search": cmdSearch, "read": cmdRead, "backlinks": cmdBacklinks, "folders": cmdFolders, "tags": cmdTags,
-    "check": cmdCheck, "set-style": cmdSetStyle, "format": cmdFormat, "add-todo": cmdAddTodo, "add-tag": cmdAddTag,
+    "history": cmdHistory, "edit": cmdEdit, "restore": cmdRestore, "check": cmdCheck, "set-style": cmdSetStyle, "format": cmdFormat, "add-todo": cmdAddTodo, "add-tag": cmdAddTag,
     "link": cmdLink, "add-table": cmdAddTable, "attach": cmdAttach, "add-url": cmdAddURL,
     "pin": cmdPin, "create-folder": cmdCreateFolder, "create": cmdCreate, "append": cmdAppend,
 ]

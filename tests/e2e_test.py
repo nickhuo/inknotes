@@ -349,6 +349,40 @@ def test_create_takes_the_title_from_markdown_only(inknotes):
     errors(inknotes, "usage", "create", "--folder", FOLDER, "--markdown", "-", stdin="\n\n")
 
 
+def test_edit_replaces_paragraphs_and_restore_undoes_it(inknotes):
+    note = inknotes.create("# Edit\nintro #edittag\n| A | B |\n|---|---|\n| 1 | 2 |\n- [x] done\nlast")
+    intro = paragraph(note, "intro #edittag")
+    dry = inknotes("edit", note["id"], "intro #edittag", "--count", "2", "--markdown", "-", stdin="New **intro**\n- [ ] task\n")
+    assert dry["dry_run"] and [p["text"] for p in dry["plan"]["replaces"]] == ["intro #edittag", "[table]"]
+    assert inknotes("history", note["id"])["count"] == 0
+
+    edited = inknotes("edit", note["id"], "intro #edittag", "--count", "2", "--markdown", "-", "--apply",
+                      stdin="New **intro**\n- [ ] task\n")
+    assert [p["text"] for p in edited["note"]["paragraphs"]] == ["Edit", "New intro", "task", "done", "last"]
+    assert paragraph(edited["note"], "New intro")["paragraph_id"] == intro["paragraph_id"]
+    assert "#edittag" not in [t["tag"] for t in inknotes("tags")["tags"]]
+    errors(inknotes, "bad_index", "edit", note["id"], "--index", "4", "--count", "2", "--markdown", "-", stdin="x")
+
+    restored = inknotes("restore", note["id"], "--apply")
+    assert restored["plan"]["snapshot"]["id"] == edited["snapshot"]
+    assert restored["note"]["paragraphs"] == note["paragraphs"]
+    assert "#edittag" in [t["tag"] for t in inknotes("tags")["tags"]]
+    # Restoring again undoes the restore.
+    assert [p["text"] for p in inknotes("restore", note["id"], "--apply")["note"]["paragraphs"]][1] == "New intro"
+    errors(inknotes, "snapshot_not_found", "restore", note["id"], "19990101T000000.000Z")
+
+
+def test_history_keeps_the_newest_five_snapshots(inknotes):
+    note = inknotes.create("# History\nv0")
+    ids = [inknotes("edit", note["id"], "--index", "1", "--markdown", "-", "--apply", stdin=f"v{i}\n")["snapshot"]
+           for i in range(1, 8)]
+    history = inknotes("history", note["id"])
+    assert [s["id"] for s in history["snapshots"]] == ids[:-6:-1]
+    assert len(list((inknotes.history / note["id"]).iterdir())) == 5
+    oldest = inknotes("restore", note["id"], ids[2], "--apply")["note"]
+    assert [p["text"] for p in oldest["paragraphs"]] == ["History", "v2"]
+
+
 # Safety
 
 

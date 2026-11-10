@@ -217,6 +217,34 @@ func insertParagraphs(_ note: AnyObject, after afterIndex: Int, _ content: NSAtt
     mergeable(note).insert(insertion, at: at)
 }
 
+/// The Notes object behind each attachment character in `text`, nil when Notes no longer has it.
+func attachmentObjects(_ text: NSAttributedString) -> [(id: String, object: AnyObject?)] {
+    var out: [(id: String, object: AnyObject?)] = []
+    text.enumerateAttribute(Key.attachment, in: NSRange(location: 0, length: text.length)) { value, _, _ in
+        guard let value else { return }
+        let tt = view(value as AnyObject, as: ICTTAttachment.self)
+        let inline = (tt.attachmentUTI() ?? "").hasPrefix(UTI.inlinePrefix)
+        out.append((tt.attachmentIdentifier() ?? "", inline ? tt.inlineAttachment(in: Store.moc) : tt.attachment(in: Store.moc)))
+    }
+    return out
+}
+
+/// Replaces `range` with `content`. Notes does not notice attachments leaving the text, so removed
+/// tags and links would still count in the tag browser and backlinks: mark them deleted, and
+/// unmark any that `content` brings back.
+func replaceText(_ note: AnyObject, _ range: NSRange, with content: NSAttributedString) {
+    let before = attachmentObjects(bodyText(note))
+    mergeable(note).replaceCharacters(in: range, with: content)
+    let after = attachmentObjects(bodyText(note))
+    let kept = Set(after.map(\.id))
+    for case let (id, object?) in before where !kept.contains(id) {
+        view(object, as: ICCloudSyncingObject.self).markForDeletion()
+    }
+    for case let (_, object?) in after where kv(object, "markedForDeletion") as? Bool == true {
+        view(object, as: ICCloudSyncingObject.self).unmarkForDeletion()
+    }
+}
+
 /// Replaces the paragraph style on every run of `range`, keeping other attributes.
 func setParagraphStyle(_ note: AnyObject, _ text: NSAttributedString, _ range: NSRange, _ style: AnyObject) {
     text.enumerateAttributes(in: range) { attrs, r, _ in

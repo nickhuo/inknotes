@@ -132,6 +132,7 @@ func objects(_ collection: Any?) -> [AnyObject] {
 @objc protocol ICTTMergeableString {
     @objc(attributedString) func attributedString() -> NSAttributedString
     @objc(insertAttributedString:atIndex:) func insert(_ string: NSAttributedString, at index: Int)
+    @objc(replaceCharactersInRange:withAttributedString:) func replaceCharacters(in range: NSRange, with string: NSAttributedString)
     @objc(setAttributes:range:) func setAttributes(_ attributes: [NSAttributedString.Key: Any], range: NSRange)
 }
 
@@ -172,6 +173,12 @@ func objects(_ collection: Any?) -> [AnyObject] {
     @objc(title) func title() -> String?
     @objc(urlString) func urlString() -> String?
     @objc(URL) func url() -> URL?
+}
+
+/// ICAttachment and ICInlineAttachment.
+@objc protocol ICCloudSyncingObject {
+    @objc(markForDeletion) func markForDeletion()
+    @objc(unmarkForDeletion) func unmarkForDeletion()
 }
 
 @objc protocol ICAttachmentTableModel {

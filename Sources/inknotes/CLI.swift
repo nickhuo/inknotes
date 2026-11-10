@@ -102,6 +102,15 @@ struct CommandSpec {
         .init(name: "append", positionals: [.note], summary: "Plan Markdown content to insert into a note.",
               example: "append <note> --markdown report.md", options: [markdown] + placement,
               requires: [Requirement(["markdown"], "Pass --markdown <file>, or --markdown - to read stdin.")], writes: true),
+        .init(name: "edit", positionals: [.note, .item], summary: "Plan to replace paragraphs with Markdown content.",
+              example: "edit <note> --index 2 --count 3 --markdown section.md",
+              options: [index, markdown, CLIOption("count", "N", "Replace this many paragraphs, starting at the named one (default: 1).")],
+              requires: [.paragraph, Requirement(["markdown"], "Pass --markdown <file>, or --markdown - to read stdin.")], writes: true),
+        .init(name: "history", positionals: [.note], summary: "List a note's snapshots, newest first.",
+              example: "history <note>"),
+        .init(name: "restore", positionals: [.note, Positional("snapshot", required: false)],
+              summary: "Plan to restore a note's text from a snapshot (default: the newest).",
+              example: "restore <note> 20261108T051500.000Z", writes: true),
         .init(name: "create-folder", positionals: [Positional("name", label: "folder name")], summary: "Plan a folder or subfolder.",
               example: "create-folder Research --account 'On My Mac'",
               options: [account, CLIOption("parent", "PATH|ID", "Create inside this parent folder.")], writes: true),
@@ -188,7 +197,10 @@ struct CommandSpec {
         else if name == "help" { notes.append("Help is text and never opens Notes.") }
         else { notes.append("Results are JSON.") }
         if takesText { notes.append("If an argument starts with -, put -- before it. Everything after -- is literal.") }
-        if ["create", "append"].contains(name) { notes += Self.markdownSyntax }
+        if ["create", "append", "edit"].contains(name) { notes += Self.markdownSyntax }
+        if writes && !["create", "create-folder", "pin"].contains(name) {
+            notes.append("Applying saves a snapshot of the note first; `inknotes restore <note>` undoes the last change.")
+        }
         return """
         Usage: \(invocation)
         \(summary)
@@ -307,9 +319,9 @@ struct Args {
         if positional.count > spec.positionals.count {
             fail("usage", "Unexpected argument \"\(positional[spec.positionals.count])\" for \(spec.name).\(hint)")
         }
-        for key in ["limit", "indent", "index", "paragraph-index"] {
+        for key in ["limit", "count", "indent", "index", "paragraph-index"] {
             guard let value = options[key] else { continue }
-            let minimum = key == "limit" ? 1 : 0
+            let minimum = ["limit", "count"].contains(key) ? 1 : 0
             guard let number = Int(value), number >= minimum else {
                 fail(key.contains("index") ? "bad_index" : "usage", "--\(key) needs an integer >= \(minimum); got \"\(value)\".\(hint)")
             }

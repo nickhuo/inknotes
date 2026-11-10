@@ -40,13 +40,14 @@ class InkNotesError(Exception):
 class InkNotes:
     """Runs the inknotes binary inside the test container."""
 
-    def __init__(self, binary: Path):
+    def __init__(self, binary: Path, history: Path):
         self.binary = binary
+        self.history = history
 
     def raw(self, *args: str, stdin: str | None = None, env: dict | None = None) -> subprocess.CompletedProcess:
         # The caller's INKNOTES_WRITABLE_ACCOUNTS must not leak in; tests set it explicitly.
         full_env = {k: v for k, v in os.environ.items() if k != "INKNOTES_WRITABLE_ACCOUNTS"}
-        full_env.update({"INKNOTES_CONTAINER": CONTAINER, **(env or {})})
+        full_env.update({"INKNOTES_CONTAINER": CONTAINER, "INKNOTES_HISTORY_DIR": str(self.history), **(env or {})})
         return subprocess.run([str(self.binary), *args], input=stdin, capture_output=True, text=True, env=full_env, timeout=120)
 
     def __call__(self, *args: str, stdin: str | None = None, env: dict | None = None):
@@ -120,14 +121,14 @@ def binary() -> Path:
 
 
 @pytest.fixture(scope="session")
-def inknotes(binary: Path):
+def inknotes(binary: Path, tmp_path_factory):
     """A fresh test store with one folder, E2E; the real store must stay untouched."""
     try:
         before = real_store_fingerprint()
     except sqlite3.OperationalError as e:
         pytest.exit(f"Cannot read the Notes database ({e}). Run the tests from a process with Full Disk Access.", 2)
     shutil.rmtree(TEST_STORE_DIR, ignore_errors=True)
-    nn = InkNotes(binary)
+    nn = InkNotes(binary, tmp_path_factory.mktemp("history"))
     nn("create-folder", FOLDER, "--apply")
     # Guard against the container seam silently falling back to the real store.
     paths = sorted(f["path"] for f in nn("folders")["folders"])
