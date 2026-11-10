@@ -8,7 +8,7 @@ inknotes edits notes through the same framework Notes.app itself uses. Everythin
 
 ## Before you install
 
-- **Supported platform:** macOS 27.2 on Apple silicon.
+- **Supported platform:** macOS 27.2 or later on Apple silicon.
 - **It can break.** inknotes writes through NotesShared, a private Apple framework with no compatibility promise, so a macOS update can break it. Each call checks that the method it needs exists and fails with `unsupported_macos` if it doesn't. That check can't catch a method that still exists but behaves differently.
 - **Your accounts share one file.** On My Mac notes and iCloud notes live in the same database file. Limiting writes to On My Mac keeps inknotes from editing your iCloud notes, but a bug that damaged the file would affect both.
 - **Back up first.**
